@@ -235,7 +235,7 @@ export function StoreForm({ mode, store }: StoreFormProps) {
         >
           <Link href="/admin/store">
             <ArrowLeft className="h-4 w-4" />
-            Back to Stores
+            {isEdit ? "Back to Stores" : "Back"}
           </Link>
         </Button>
 
