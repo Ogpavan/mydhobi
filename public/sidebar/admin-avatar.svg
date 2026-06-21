@@ -1,0 +1,9 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Pawan Admin avatar</title>
+  <desc id="desc">A professional admin profile illustration.</desc>
+  <rect width="40" height="40" rx="6" fill="#EFF6FF"/>
+  <path d="M20 20.6C23.3137 20.6 26 17.9137 26 14.6C26 11.2863 23.3137 8.6 20 8.6C16.6863 8.6 14 11.2863 14 14.6C14 17.9137 16.6863 20.6 20 20.6Z" fill="#2563EB"/>
+  <path d="M9.5 33C10.7 27.5 14.6 24.2 20 24.2C25.4 24.2 29.3 27.5 30.5 33H9.5Z" fill="#14B8A6"/>
+  <path d="M15.5 14.1C16.8 15.1 18.4 15.7 20.2 15.7C22.1 15.7 23.7 15.1 25 14.1C24.7 11.8 22.6 10 20 10C17.4 10 15.3 11.8 15.5 14.1Z" fill="#1E40AF" fill-opacity="0.45"/>
+  <path d="M15.3 29.5H24.7" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
