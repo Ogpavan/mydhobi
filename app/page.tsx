@@ -82,7 +82,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative z-10 mt-7 max-w-[560px]">
+          <div className="relative z-10 mt-7 hidden max-w-[560px] lg:block">
             <h1 className="max-w-[430px] text-[44px] font-semibold leading-[0.98] tracking-normal text-[#0B1E57] xl:text-[48px]">
               Run your dhobi business easily
             </h1>
@@ -174,21 +174,6 @@ export default function HomePage() {
                 className="h-[34px] w-full rounded bg-[#075DFF] px-3 text-[13px] font-medium shadow-[0_8px_18px_rgba(7,93,255,0.2)] hover:bg-[#064FEB]"
               >
                 {isSubmitting ? "Signing in..." : "Sign In"}
-              </Button>
-
-              <div className="relative py-0.5">
-                <div className="absolute inset-x-0 top-1/2 h-px bg-[#E3EBF7]" />
-                <span className="relative mx-auto block w-fit bg-white px-4 text-[13px] text-[#7A89A3]">
-                  or
-                </span>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="h-[34px] w-full rounded border-[#DCE6F2] bg-white px-3 text-[13px] font-medium text-[#075DFF] shadow-none hover:bg-[#F7FAFF]"
-              >
-                Login with OTP
               </Button>
             </form>
 
