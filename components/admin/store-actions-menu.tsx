@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Eye, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -66,6 +66,12 @@ export function StoreActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-32">
+        <DropdownMenuItem asChild>
+          <Link href={`/admin/store/${storeId}`} className="gap-2">
+            <Eye className="h-3.5 w-3.5" />
+            View
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href={`/admin/store/${storeId}/edit`} className="gap-2">
             <Pencil className="h-3.5 w-3.5" />

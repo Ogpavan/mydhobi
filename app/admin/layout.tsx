@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { getCurrentUser } from "@/lib/session";
+import { listSidebarSettings } from "@/lib/sidebar-settings";
 
 export default async function AdminLayout({
   children,
@@ -14,5 +15,15 @@ export default async function AdminLayout({
     redirect("/");
   }
 
-  return <AdminShell user={user}>{children}</AdminShell>;
+  if (user.role === "customer") {
+    redirect("/customer");
+  }
+
+  const sidebarItems = await listSidebarSettings();
+
+  return (
+    <AdminShell user={user} sidebarItems={sidebarItems}>
+      {children}
+    </AdminShell>
+  );
 }

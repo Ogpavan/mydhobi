@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Smartphone } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { startNavigationProgress } from "@/components/navigation-loader";
 
 export default function HomePage() {
   const router = useRouter();
@@ -20,7 +22,7 @@ export default function HomePage() {
     setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "").trim();
+    const mobile = String(formData.get("mobile") ?? "").trim();
     const password = String(formData.get("password") ?? "");
 
     try {
@@ -29,21 +31,27 @@ export default function HomePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ mobile, password }),
       });
-      const data = (await response.json()) as { message?: string };
+      const data = (await response.json()) as {
+        message?: string;
+        user?: { role: "admin" | "staff" | "customer" };
+      };
 
       if (!response.ok) {
-        setError(data.message ?? "Invalid email or password.");
+        setError(data.message ?? "Invalid mobile number or password.");
         return;
       }
 
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get("redirect");
 
-      router.replace(
-        redirectTo?.startsWith("/admin") ? redirectTo : "/admin/dashboard",
-      );
+      startNavigationProgress();
+      const isCustomer = data.user?.role === "customer";
+      const safeRedirect = isCustomer
+        ? redirectTo?.startsWith("/customer") ? redirectTo : "/customer"
+        : redirectTo?.startsWith("/admin") ? redirectTo : "/admin/dashboard";
+      router.replace(safeRedirect);
       router.refresh();
     } catch {
       setError("Unable to sign in right now.");
@@ -111,16 +119,22 @@ export default function HomePage() {
             >
               <div className="space-y-1.5">
                 <label className="text-[13px] font-medium text-[#0B1E57]">
-                  Email
+                  Mobile Number
                 </label>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7A95]" />
+                  <Smartphone className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7A95]" />
                   <Input
-                    name="email"
-                    type="email"
+                    name="mobile"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]{10}"
+                    maxLength={10}
+                    onInput={(event) => {
+                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "").slice(0, 10);
+                    }}
                     className="h-[36px] rounded border-[#DCE6F2] pl-11 pr-4 text-sm font-normal shadow-none focus-visible:border-[#075DFF] focus-visible:ring-1 focus-visible:ring-[#075DFF]/20"
-                    placeholder="Enter email"
-                    autoComplete="email"
+                    placeholder="Enter 10-digit mobile number"
+                    autoComplete="tel"
                     required
                   />
                 </div>
@@ -158,9 +172,9 @@ export default function HomePage() {
                   />
                   Remember me
                 </label>
-                <button type="button" className="font-medium text-[#075DFF] hover:underline">
+                <Link href="/forgot-password" className="font-medium text-[#075DFF] hover:underline">
                   Forgot password?
-                </button>
+                </Link>
               </div>
 
               {error ? (
@@ -177,11 +191,18 @@ export default function HomePage() {
               </Button>
             </form>
 
+            <p className="mt-5 text-center text-[13px] text-[#5A6B8C]">
+              New customer?{" "}
+              <Link href="/register" className="font-medium text-[#075DFF] hover:underline">
+                Create account
+              </Link>
+            </p>
+
             <div className="mt-6 flex items-center justify-center gap-2 text-[13px] text-[#5A6B8C]">
               <span>Need help?</span>
-              <button type="button" className="font-medium text-[#075DFF] hover:underline">
+              <a href="tel:+919876543210" className="font-medium text-[#075DFF] hover:underline">
                 Contact support
-              </button>
+              </a>
             </div>
           </div>
         </section>

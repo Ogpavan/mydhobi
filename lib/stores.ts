@@ -181,14 +181,29 @@ export function validateStorePayload(payload: StorePayload) {
     ["Store name", payload.name],
     ["Email", payload.email],
     ["Mobile number", payload.mobile],
-    ["Invoice generation name", payload.invoiceGenName],
-    ["Invoice generation number", payload.invoiceGenNumber],
+    ["Name on invoice", payload.invoiceGenName],
+    ["Starting invoice number", payload.invoiceGenNumber],
     ["Address line 1", payload.addressLine1],
     ["State", payload.state],
   ].filter(([, value]) => !value);
 
   if (missingFields.length > 0) {
     return `${missingFields[0][0]} is required.`;
+  }
+
+  if (!/^\d{10}$/.test(payload.mobile)) {
+    return "Enter a 10-digit mobile number.";
+  }
+
+  const durationFields = [
+    ["Process time", payload.processTime],
+    ["Delivery time", payload.tagDeliveryDateInterval],
+  ];
+
+  for (const [label, value] of durationFields) {
+    if (value && !/^[1-9]\d* (hours|minutes)$/.test(value)) {
+      return `${label} must use a number with hours or minutes.`;
+    }
   }
 
   return null;
@@ -327,6 +342,14 @@ export async function updateStore(id: string, payload: StorePayload) {
     ],
   );
 
+  return rows[0] ? mapStore(rows[0]) : null;
+}
+
+export async function updateStoreStatus(id: string, status: StoreStatus) {
+  const { rows } = await pool.query<StoreRow>(
+    `UPDATE stores SET status = $2 WHERE id = $1 RETURNING ${storeColumns}`,
+    [id, status],
+  );
   return rows[0] ? mapStore(rows[0]) : null;
 }
 

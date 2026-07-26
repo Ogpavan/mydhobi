@@ -6,32 +6,32 @@ import {
   JWT_MAX_AGE_SECONDS,
   signAuthToken,
 } from "@/lib/auth";
-import { getUserByEmail } from "@/lib/users";
+import { getUserByMobile } from "@/lib/users";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
-      email?: string;
+      mobile?: string;
       password?: string;
     };
 
-    const email = body.email?.trim().toLowerCase();
+    const mobile = body.mobile?.trim() ?? "";
     const password = body.password ?? "";
 
-    if (!email || !password) {
+    if (!/^\d{10}$/.test(mobile) || !password) {
       return NextResponse.json(
-        { message: "Email and password are required." },
+        { message: "Enter a 10-digit mobile number and password." },
         { status: 400 },
       );
     }
 
-    const user = await getUserByEmail(email);
+    const user = await getUserByMobile(mobile);
 
     if (!user || user.status !== "active") {
       return NextResponse.json(
-        { message: "Invalid email or password." },
+        { message: "Invalid mobile number or password." },
         { status: 401 },
       );
     }
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     if (!passwordMatches) {
       return NextResponse.json(
-        { message: "Invalid email or password." },
+        { message: "Invalid mobile number or password." },
         { status: 401 },
       );
     }
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     const authUser = {
       id: user.id,
       email: user.email,
+      mobile: user.mobile,
       name: user.name,
       designation: user.designation,
       role: user.role,

@@ -2,20 +2,24 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
-import { ArrowLeft, Crosshair, ImageUp, Info, Save } from "lucide-react";
+import type { ChangeEventHandler, FormEvent, ReactNode } from "react";
+import { useRef, useState } from "react";
+import { ArrowLeft, Crosshair, ImageUp, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { startNavigationProgress } from "@/components/navigation-loader";
+import type { SetupCity, SetupState } from "@/lib/locations";
 import { cn } from "@/lib/utils";
-import type { Store, StorePayload, StoreStatus } from "@/lib/stores";
+import type { Store, StorePayload } from "@/lib/stores";
 
 type StoreFormProps = {
   mode: "create" | "edit";
   store?: Store;
+  locationStates?: SetupState[];
+  locationCities?: SetupCity[];
 };
 
 type FieldProps = {
@@ -23,8 +27,12 @@ type FieldProps = {
   name: keyof StorePayload;
   required?: boolean;
   type?: string;
+  digitsOnly?: boolean;
+  maxLength?: number;
   className?: string;
   defaultValue?: string;
+  value?: string;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
   placeholder?: string;
 };
 
@@ -33,8 +41,12 @@ function Field({
   name,
   required = false,
   type = "text",
+  digitsOnly = false,
+  maxLength,
   className,
   defaultValue,
+  value,
+  onChange,
   placeholder,
 }: FieldProps) {
   return (
@@ -47,11 +59,102 @@ function Field({
         name={name}
         type={type}
         defaultValue={defaultValue}
+        value={value}
+        onChange={onChange}
         placeholder={placeholder}
         required={required}
+        inputMode={digitsOnly ? "numeric" : undefined}
+        maxLength={maxLength}
+        pattern={digitsOnly && maxLength ? `[0-9]{${maxLength}}` : undefined}
+        title={
+          digitsOnly && maxLength
+            ? `Enter a ${maxLength}-digit number.`
+            : undefined
+        }
+        onInput={(event) => {
+          event.currentTarget.setCustomValidity("");
+
+          if (digitsOnly) {
+            const digits = event.currentTarget.value.replace(/\D/g, "");
+            event.currentTarget.value = maxLength
+              ? digits.slice(0, maxLength)
+              : digits;
+          }
+        }}
+        onInvalid={(event) => {
+          if (digitsOnly && maxLength) {
+            event.currentTarget.setCustomValidity(
+              `Enter a ${maxLength}-digit number.`,
+            );
+          }
+        }}
         className="h-[36px] rounded border-[#DCE6F2] text-sm font-normal shadow-none focus-visible:border-[#075DFF] focus-visible:ring-1 focus-visible:ring-[#075DFF]/20"
       />
     </label>
+  );
+}
+
+type DurationFieldName = "processTime" | "tagDeliveryDateInterval";
+type DurationUnit = "hours" | "minutes";
+
+function parseDuration(value?: string): { amount: string; unit: DurationUnit } {
+  if (!value) return { amount: "", unit: "hours" };
+
+  const match = value.trim().match(/^(\d+)\s*(hours?|hrs?|minutes?|mins?|days?)$/i);
+  if (!match) return { amount: "", unit: "hours" };
+
+  const amount = match[1];
+  const unit = match[2].toLowerCase();
+
+  if (unit.startsWith("day")) {
+    return { amount: String(Number(amount) * 24), unit: "hours" };
+  }
+
+  return {
+    amount,
+    unit: unit.startsWith("min") ? "minutes" : "hours",
+  };
+}
+
+function DurationField({
+  label,
+  name,
+  defaultValue,
+  placeholder,
+}: {
+  label: string;
+  name: DurationFieldName;
+  defaultValue?: string;
+  placeholder: string;
+}) {
+  const duration = parseDuration(defaultValue);
+
+  return (
+    <fieldset className="block space-y-1.5">
+      <legend className="text-xs font-medium text-[#31405A]">{label}</legend>
+      <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-2">
+        <Input
+          name={`${name}Value`}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          defaultValue={duration.amount}
+          placeholder={placeholder}
+          aria-label={`${label} number`}
+          className="h-[36px] rounded border-[#DCE6F2] text-sm font-normal shadow-none focus-visible:border-[#075DFF] focus-visible:ring-1 focus-visible:ring-[#075DFF]/20"
+        />
+        <select
+          name={`${name}Unit`}
+          defaultValue={duration.unit}
+          aria-label={`${label} unit`}
+          className="h-[36px] rounded border border-[#DCE6F2] bg-white px-2 text-sm font-normal text-[#071333] outline-none focus:border-[#075DFF] focus:ring-1 focus:ring-[#075DFF]/20"
+        >
+          <option value="hours">Hours</option>
+          <option value="minutes">Minutes</option>
+        </select>
+      </div>
+    </fieldset>
   );
 }
 
@@ -89,13 +192,11 @@ function TextAreaField({
 function SectionCard({
   number,
   title,
-  description,
   children,
   className,
 }: {
   number: number;
   title: string;
-  description: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -106,17 +207,9 @@ function SectionCard({
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#075DFF] text-xs font-medium text-white">
             {number}
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-medium leading-none text-[#071333]">
-                {title}
-              </h2>
-              <Info className="h-3.5 w-3.5 text-[#8EA0B8]" />
-            </div>
-            <p className="mt-1 text-xs font-normal leading-none text-[#52627A]">
-              {description}
-            </p>
-          </div>
+          <h2 className="text-sm font-medium leading-6 text-[#071333]">
+            {title}
+          </h2>
         </div>
         {children}
       </CardContent>
@@ -128,6 +221,13 @@ function getFormValue(formData: FormData, name: keyof StorePayload) {
   return String(formData.get(name) ?? "");
 }
 
+function getDurationValue(formData: FormData, name: DurationFieldName) {
+  const amount = String(formData.get(`${name}Value`) ?? "").trim();
+  const unit = formData.get(`${name}Unit`) === "minutes" ? "minutes" : "hours";
+
+  return amount ? `${amount} ${unit}` : "";
+}
+
 function getStorePayload(formData: FormData): StorePayload {
   const status = getFormValue(formData, "status");
 
@@ -136,8 +236,11 @@ function getStorePayload(formData: FormData): StorePayload {
     company: getFormValue(formData, "company"),
     email: getFormValue(formData, "email"),
     mobile: getFormValue(formData, "mobile"),
-    processTime: getFormValue(formData, "processTime"),
-    tagDeliveryDateInterval: getFormValue(formData, "tagDeliveryDateInterval"),
+    processTime: getDurationValue(formData, "processTime"),
+    tagDeliveryDateInterval: getDurationValue(
+      formData,
+      "tagDeliveryDateInterval",
+    ),
     invoiceGenName: getFormValue(formData, "invoiceGenName"),
     invoiceGenNumber: getFormValue(formData, "invoiceGenNumber"),
     upiAccountName: getFormValue(formData, "upiAccountName"),
@@ -156,11 +259,85 @@ function getStorePayload(formData: FormData): StorePayload {
   };
 }
 
-export function StoreForm({ mode, store }: StoreFormProps) {
+function generateInvoiceNumber(storeName: string) {
+  const words = storeName.match(/[a-z0-9]+/gi) ?? [];
+  const prefix = words
+    .slice(0, 2)
+    .map((word) => word.slice(0, 3).toUpperCase())
+    .join("-");
+
+  return prefix ? `${prefix}-001` : "";
+}
+
+export function StoreForm({
+  mode,
+  store,
+  locationStates = [],
+  locationCities = [],
+}: StoreFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const initialStoreName = store?.name ?? "";
+  const generatedInvoiceNumber = generateInvoiceNumber(initialStoreName);
+  const [storeName, setStoreName] = useState(initialStoreName);
+  const [invoiceName, setInvoiceName] = useState(
+    store?.invoiceGenName || initialStoreName,
+  );
+  const [invoiceNumber, setInvoiceNumber] = useState(
+    store?.invoiceGenNumber || generatedInvoiceNumber,
+  );
+  const invoiceNameEdited = useRef(
+    Boolean(store?.invoiceGenName && store.invoiceGenName !== initialStoreName),
+  );
+  const invoiceNumberEdited = useRef(
+    Boolean(
+      store?.invoiceGenNumber &&
+        store.invoiceGenNumber !== generatedInvoiceNumber,
+    ),
+  );
   const isEdit = mode === "edit";
+  const defaultLocationStateId =
+    !isEdit && locationStates.length === 1 ? locationStates[0].id : "";
+  const defaultLocationCities = locationCities.filter(
+    (city) => city.stateId === defaultLocationStateId,
+  );
+  const [selectedLocationStateId, setSelectedLocationStateId] = useState(
+    defaultLocationStateId,
+  );
+  const [selectedLocationCity, setSelectedLocationCity] = useState(
+    defaultLocationCities.length === 1 ? defaultLocationCities[0].name : "",
+  );
+  const selectedLocationState = locationStates.find(
+    (state) => state.id === selectedLocationStateId,
+  );
+  const availableLocationCities = locationCities.filter(
+    (city) => city.stateId === selectedLocationStateId,
+  );
+  const locationIsReady =
+    isEdit || Boolean(selectedLocationState && selectedLocationCity);
+
+  function handleStoreNameChange(value: string) {
+    setStoreName(value);
+
+    if (!invoiceNameEdited.current) {
+      setInvoiceName(value);
+    }
+
+    if (!invoiceNumberEdited.current) {
+      setInvoiceNumber(generateInvoiceNumber(value));
+    }
+  }
+
+  function handleLocationStateChange(stateId: string) {
+    setSelectedLocationStateId(stateId);
+    const citiesForState = locationCities.filter(
+      (city) => city.stateId === stateId,
+    );
+    setSelectedLocationCity(
+      citiesForState.length === 1 ? citiesForState[0].name : "",
+    );
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -186,6 +363,7 @@ export function StoreForm({ mode, store }: StoreFormProps) {
       }
 
       toast.success(isEdit ? "Store updated" : "Store created");
+      startNavigationProgress();
       router.push("/admin/store");
       router.refresh();
     } catch {
@@ -248,7 +426,7 @@ export function StoreForm({ mode, store }: StoreFormProps) {
             <Link href="/admin/store">Cancel</Link>
           </Button>
           <Button
-            disabled={isSubmitting}
+            disabled={isSubmitting || !locationIsReady}
             className="h-[34px] rounded bg-[#075DFF] px-3 text-[13px] font-medium shadow-[0_8px_18px_rgba(7,93,255,0.2)] hover:bg-[#064FEB]"
           >
             <Save className="h-4 w-4" />
@@ -272,14 +450,14 @@ export function StoreForm({ mode, store }: StoreFormProps) {
           <SectionCard
             number={1}
             title="Basic Details"
-            description="Essential information about the store."
           >
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 label="Store Name"
                 name="name"
                 required
-                defaultValue={store?.name}
+                value={storeName}
+                onChange={(event) => handleStoreNameChange(event.target.value)}
                 placeholder="DhobiCart Indiranagar"
               />
               <Field
@@ -301,8 +479,10 @@ export function StoreForm({ mode, store }: StoreFormProps) {
                 name="mobile"
                 required
                 type="tel"
+                digitsOnly
+                maxLength={10}
                 defaultValue={store?.mobile}
-                placeholder="+91 98765 43210"
+                placeholder="9876543210"
               />
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-[#31405A]">
@@ -324,7 +504,6 @@ export function StoreForm({ mode, store }: StoreFormProps) {
           <SectionCard
             number={3}
             title="Payment Details"
-            description="UPI account information for receiving payments."
           >
             <div className="grid gap-4 md:grid-cols-2">
               <Field
@@ -339,68 +518,9 @@ export function StoreForm({ mode, store }: StoreFormProps) {
                 defaultValue={store?.upiAccountId}
                 placeholder="mydhobi@upi"
               />
-              <TextAreaField
-                label="Disclaimer For Upi Id Storage & Liability"
-                name="upiDisclaimer"
-                className="md:col-span-2"
-                inputClassName="min-h-[90px]"
-                defaultValue={store?.upiDisclaimer}
-                placeholder="Payments made to this UPI ID are subject to store verification."
-              />
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            number={5}
-            title="Notifications & Notes"
-            description="Add notes or special instructions for this store."
-          >
-            <TextAreaField
-              label="Notification Note Message"
-              name="notificationNote"
-              inputClassName="min-h-[58px]"
-              defaultValue={store?.notificationNote}
-              placeholder="Orders after 8 PM will be processed the next day."
-            />
-          </SectionCard>
-        </div>
-
-        <div className="space-y-4">
-          <SectionCard
-            number={2}
-            title="Invoice & Processing"
-            description="Configure invoice generation and processing preferences."
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field
-                label="Process Time"
-                name="processTime"
-                defaultValue={store?.processTime}
-                placeholder="24 hrs"
-              />
-              <Field
-                label="Tag Delivery Date Interval"
-                name="tagDeliveryDateInterval"
-                defaultValue={store?.tagDeliveryDateInterval}
-                placeholder="2 days"
-              />
-              <Field
-                label="Invoice Gen Name"
-                name="invoiceGenName"
-                required
-                defaultValue={store?.invoiceGenName}
-                placeholder="MyDhobi Indiranagar"
-              />
-              <Field
-                label="Invoice Gen Number"
-                name="invoiceGenNumber"
-                required
-                defaultValue={store?.invoiceGenNumber}
-                placeholder="INV-001"
-              />
               <label className="block space-y-1.5 md:col-span-2">
                 <span className="text-xs font-medium text-[#31405A]">
-                  Upload Your Payment QrCode Image Below
+                  Payment QR Code
                 </span>
                 <div className="flex min-h-[64px] items-center gap-3 rounded border border-dashed border-[#C8D6E6] bg-[#F8FBFF] px-4 py-3 focus-within:border-[#075DFF] focus-within:ring-1 focus-within:ring-[#075DFF]/20">
                   <div className="flex h-9 w-9 items-center justify-center rounded bg-blue-50 text-blue-700">
@@ -417,9 +537,65 @@ export function StoreForm({ mode, store }: StoreFormProps) {
           </SectionCard>
 
           <SectionCard
+            number={5}
+            title="Notifications & Notes"
+          >
+            <TextAreaField
+              label="Notification Note Message"
+              name="notificationNote"
+              inputClassName="min-h-[58px]"
+              defaultValue={store?.notificationNote}
+              placeholder="Orders after 8 PM will be processed the next day."
+            />
+          </SectionCard>
+        </div>
+
+        <div className="space-y-4">
+          <SectionCard
+            number={2}
+            title="Invoice & Processing"
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <DurationField
+                label="Process Time"
+                name="processTime"
+                defaultValue={store?.processTime}
+                placeholder="24"
+              />
+              <DurationField
+                label="Tag Delivery Date Interval"
+                name="tagDeliveryDateInterval"
+                defaultValue={store?.tagDeliveryDateInterval}
+                placeholder="48"
+              />
+              <Field
+                label="Name on Invoice"
+                name="invoiceGenName"
+                required
+                value={invoiceName}
+                onChange={(event) => {
+                  invoiceNameEdited.current = true;
+                  setInvoiceName(event.target.value);
+                }}
+                placeholder="Store name"
+              />
+              <Field
+                label="Starting Invoice Number"
+                name="invoiceGenNumber"
+                required
+                value={invoiceNumber}
+                onChange={(event) => {
+                  invoiceNumberEdited.current = true;
+                  setInvoiceNumber(event.target.value);
+                }}
+                placeholder="MYD-IND-001"
+              />
+            </div>
+          </SectionCard>
+
+          <SectionCard
             number={4}
             title="Address Details"
-            description="Store location and address information."
           >
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field
@@ -436,19 +612,87 @@ export function StoreForm({ mode, store }: StoreFormProps) {
                 defaultValue={store?.addressLine2}
                 placeholder="Near Metro Station"
               />
-              <Field
-                label="City"
-                name="city"
-                defaultValue={store?.city}
-                placeholder="Bengaluru"
-              />
-              <Field
-                label="State"
-                name="state"
-                required
-                defaultValue={store?.state}
-                placeholder="Karnataka"
-              />
+              {isEdit ? (
+                <>
+                  <Field
+                    label="City"
+                    name="city"
+                    defaultValue={store?.city}
+                    placeholder="Bengaluru"
+                  />
+                  <Field
+                    label="State"
+                    name="state"
+                    required
+                    defaultValue={store?.state}
+                    placeholder="Karnataka"
+                  />
+                </>
+              ) : (
+                <>
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[#31405A]">
+                      State <span className="text-red-500">*</span>
+                    </span>
+                    <input
+                      type="hidden"
+                      name="state"
+                      value={selectedLocationState?.name ?? ""}
+                    />
+                    <select
+                      value={selectedLocationStateId}
+                      onChange={(event) =>
+                        handleLocationStateChange(event.target.value)
+                      }
+                      required
+                      disabled={locationStates.length === 0}
+                      className="h-[36px] w-full rounded border border-[#DCE6F2] bg-white px-3 text-sm font-normal text-[#071333] outline-none transition-colors focus:border-[#075DFF] focus:ring-1 focus:ring-[#075DFF]/20 disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="">
+                        {locationStates.length === 0
+                          ? "No active states"
+                          : "Select state"}
+                      </option>
+                      {locationStates.map((state) => (
+                        <option key={state.id} value={state.id}>
+                          {state.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[#31405A]">
+                      City <span className="text-red-500">*</span>
+                    </span>
+                    <select
+                      name="city"
+                      value={selectedLocationCity}
+                      onChange={(event) =>
+                        setSelectedLocationCity(event.target.value)
+                      }
+                      required
+                      disabled={
+                        !selectedLocationStateId ||
+                        availableLocationCities.length === 0
+                      }
+                      className="h-[36px] w-full rounded border border-[#DCE6F2] bg-white px-3 text-sm font-normal text-[#071333] outline-none transition-colors focus:border-[#075DFF] focus:ring-1 focus:ring-[#075DFF]/20 disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="">
+                        {!selectedLocationStateId
+                          ? "Select state first"
+                          : availableLocationCities.length === 0
+                            ? "No active cities"
+                            : "Select city"}
+                      </option>
+                      {availableLocationCities.map((city) => (
+                        <option key={city.id} value={city.name}>
+                          {city.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
               <Field
                 label="LandMark"
                 name="landmark"

@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { type PaymentStatus } from "@/lib/mock-data";
+import { type PaymentStatus } from "@/lib/admin-dashboard-types";
 import { cn } from "@/lib/utils";
 
 const paymentStyles: Record<PaymentStatus, string> = {

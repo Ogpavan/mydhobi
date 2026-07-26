@@ -1,4 +1,5 @@
 import { Eye } from "lucide-react";
+import Link from "next/link";
 
 import { PaymentBadge } from "@/components/admin/payment-badge";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -6,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { type RecentOrder } from "@/lib/mock-data";
+import { type RecentOrder } from "@/lib/admin-dashboard-types";
 
 type RecentOrdersTableProps = {
   orders: RecentOrder[];
@@ -28,10 +28,7 @@ export function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
   return (
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-4">
-        <div>
-          <CardTitle>Recent Orders</CardTitle>
-          <CardDescription>Latest laundry and dry-cleaning orders</CardDescription>
-        </div>
+        <CardTitle>Recent Orders</CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-2">
         <div className="overflow-x-auto">
@@ -77,9 +74,11 @@ export function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
                     {order.amount}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm">
-                      <Eye className="h-4 w-4" />
-                      View
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/admin/orders/${order.id}`}>
+                        <Eye className="h-4 w-4" />
+                        View
+                      </Link>
                     </Button>
                   </TableCell>
                 </TableRow>

@@ -6,25 +6,20 @@ import { StatCard } from "@/components/admin/stat-card";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  orderStatusData,
-  ordersOverviewData,
-  recentOrders,
-  todayDeliveries,
-  todayPickups,
-} from "@/lib/mock-data";
+import { getDashboardData } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
 
-const totalStatusOrders = orderStatusData.reduce(
-  (sum, item) => sum + item.value,
-  0,
-);
+export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const data = await getDashboardData();
+  const totalStatusOrders = Math.max(
+    1,
+    data.orderStatuses.reduce((sum, item) => sum + item.value, 0),
+  );
   return (
     <div className="space-y-[12px]">
       <section className="grid gap-[12px] sm:grid-cols-2 xl:grid-cols-4">
@@ -32,51 +27,49 @@ export default function DashboardPage() {
           icon="statPickups"
           iconScale={0.66}
           label="Today Pickups"
-          value="24"
-          trend="12%"
+          value={String(data.stats.todayPickups)}
+          trend={`${Math.abs(data.trends.pickups)}%`}
+          trendDirection={data.trends.pickups < 0 ? "down" : "up"}
         />
         <StatCard
           icon="statDeliveries"
           iconScale={0.66}
           label="Today Deliveries"
-          value="18"
-          trend="8%"
+          value={String(data.stats.todayDeliveries)}
+          trend={`${Math.abs(data.trends.deliveries)}%`}
+          trendDirection={data.trends.deliveries < 0 ? "down" : "up"}
           valueClassName="text-[#10A83B]"
         />
         <StatCard
           icon="statProcess"
           iconScale={0.66}
           label="Orders in Process"
-          value="42"
-          trend="5%"
+          value={String(data.stats.ordersInProcess)}
+          trend={`${Math.abs(data.trends.orders)}%`}
+          trendDirection={data.trends.orders < 0 ? "down" : "up"}
           valueClassName="text-[#FF5B13]"
         />
         <StatCard
           icon="statPayments"
           iconScale={0.64}
           label="Pending Payments"
-          value="₹12,450"
-          trend="6%"
-          trendDirection="down"
+          value={`₹${data.stats.pendingPayments.toLocaleString("en-IN")}`}
+          trend={`${Math.abs(data.trends.payments)}%`}
+          trendDirection={data.trends.payments < 0 ? "down" : "up"}
           valueClassName="text-[#6D28D9] text-[29px]"
         />
       </section>
 
       <section className="grid gap-[12px] xl:grid-cols-[minmax(0,1.53fr)_minmax(360px,1fr)]">
-        <DashboardChart data={ordersOverviewData} />
+        <DashboardChart data={data.ordersOverview} />
 
         <Card className="h-[270px] overflow-hidden">
           <CardHeader className="flex-row items-start gap-[11px] p-[12px] pb-[6px]">
             <ReferenceSpriteIcon name="statusPie" scale={0.72} />
-            <div>
-              <CardTitle>Order Status</CardTitle>
-              <CardDescription className="mt-1.5">
-                Current operational breakdown
-              </CardDescription>
-            </div>
+            <CardTitle>Order Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-[6px] px-[18px] pb-[12px] pt-0">
-            {orderStatusData.map((item) => {
+            {data.orderStatuses.map((item) => {
               const percentage = Math.round((item.value / totalStatusOrders) * 100);
 
               return (
@@ -115,17 +108,17 @@ export default function DashboardPage() {
           title="Today's Pickups"
           icon="pickupHeader"
           countTone="blue"
-          orders={todayPickups}
+          orders={data.todayPickups}
         />
         <OperationCard
           title="Today's Deliveries"
           icon="deliveryHeader"
           countTone="green"
-          orders={todayDeliveries}
+          orders={data.todayDeliveries}
         />
       </section>
 
-      <RecentOrdersTable orders={recentOrders} />
+      <RecentOrdersTable orders={data.recentOrders} />
     </div>
   );
 }

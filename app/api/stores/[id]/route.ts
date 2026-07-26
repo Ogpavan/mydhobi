@@ -6,6 +6,7 @@ import {
   getStoreById,
   normalizeStorePayload,
   updateStore,
+  updateStoreStatus,
   validateStorePayload,
 } from "@/lib/stores";
 
@@ -48,7 +49,14 @@ export async function PATCH(request: Request, { params }: StoreRouteContext) {
 
   try {
     const { id } = await params;
-    const payload = normalizeStorePayload(await request.json());
+    const requestBody = await request.json() as { status?: unknown } & Record<string, unknown>;
+    if (requestBody.status === "active" || requestBody.status === "inactive") {
+      const store = await updateStoreStatus(id, requestBody.status);
+      return store ? NextResponse.json({ store }) : NextResponse.json({ message: "Store not found." }, { status: 404 });
+    }
+    const payload = normalizeStorePayload(
+      requestBody as Parameters<typeof normalizeStorePayload>[0],
+    );
     const error = validateStorePayload(payload);
 
     if (error) {

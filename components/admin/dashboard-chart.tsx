@@ -15,7 +15,6 @@ import { ReferenceSpriteIcon } from "@/components/admin/reference-sprite-icon";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -40,10 +39,7 @@ export function DashboardChart({ data }: DashboardChartProps) {
       <CardHeader className="flex-row items-start justify-between gap-4 p-[12px] pb-0">
         <div className="flex items-center gap-[11px]">
           <ReferenceSpriteIcon name="chartIcon" scale={0.72} />
-          <div>
-            <CardTitle>Orders Overview</CardTitle>
-            <CardDescription className="mt-1.5">Last 7 days order volume</CardDescription>
-          </div>
+          <CardTitle>Orders Overview</CardTitle>
         </div>
         <div className="min-w-[78px] rounded-[10px] border border-[#D4E4FF] bg-[#EEF5FF] px-2 py-1.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
           <p className="text-[10px] font-medium leading-none text-[#075DFF]">

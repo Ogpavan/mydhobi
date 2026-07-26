@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { type OrderStatus } from "@/lib/mock-data";
+import { type OrderStatus } from "@/lib/admin-dashboard-types";
 import { cn } from "@/lib/utils";
 
 const statusStyles: Record<OrderStatus, string> = {
@@ -7,7 +7,9 @@ const statusStyles: Record<OrderStatus, string> = {
   "Picked Up": "border-cyan-100 bg-cyan-50 text-cyan-700",
   "In Cleaning": "border-amber-100 bg-amber-50 text-amber-700",
   Ready: "border-teal-100 bg-teal-50 text-teal-700",
+  "Out for Delivery": "border-orange-100 bg-orange-50 text-orange-700",
   Delivered: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  Cancelled: "border-red-100 bg-red-50 text-red-700",
 };
 
 export function StatusBadge({ status }: { status: OrderStatus }) {

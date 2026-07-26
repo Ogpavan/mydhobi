@@ -1,0 +1,6 @@
+import { CustomerBottomNav } from "@/components/customer/customer-bottom-nav";
+import { CustomerSimpleHeader } from "@/components/customer/customer-simple-header";
+
+export default function TermsPage(){
+  return <div className="min-h-screen bg-[#fafafe] pb-[88px] text-[#17182c]"><CustomerSimpleHeader title="Terms & Conditions" backHref="/customer/profile" /><main className="mx-auto max-w-[720px] px-4 py-4"><section className="rounded-[12px] border border-[#e5e2eb] bg-white p-4 text-[10px] leading-5 text-[#666879]"><h2 className="text-[12px] font-bold text-[#17182c]">Orders</h2><p className="mt-3">Check your selected service, items, pickup address, and time before placing an order. Prices shown at checkout include the active coupon or referral discount.</p><h2 className="mt-4 text-[12px] font-bold text-[#17182c]">Pickup and Delivery</h2><p className="mt-3">Keep clothes ready at the selected time. Delivery times may change when an order needs special care.</p><h2 className="mt-4 text-[12px] font-bold text-[#17182c]">Payments and Support</h2><p className="mt-3">Payment and refund status appears in your order and wallet. Raise a complaint if an order or payment needs review.</p></section></main><CustomerBottomNav active="profile" /></div>;
+}

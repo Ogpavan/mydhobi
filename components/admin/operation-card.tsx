@@ -5,7 +5,7 @@ import {
   type ReferenceSpriteName,
 } from "@/components/admin/reference-sprite-icon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type OperationOrder } from "@/lib/mock-data";
+import { type OperationOrder } from "@/lib/admin-dashboard-types";
 import { cn } from "@/lib/utils";
 
 type OperationCardProps = {

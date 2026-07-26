@@ -7,9 +7,10 @@ export const JWT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 export type AuthUser = {
   id: string;
   email: string;
+  mobile: string;
   name: string;
   designation: string;
-  role: "admin" | "staff";
+  role: "admin" | "staff" | "customer";
 };
 
 function getJwtSecret() {
@@ -25,6 +26,7 @@ function getJwtSecret() {
 export async function signAuthToken(user: AuthUser) {
   return new SignJWT({
     email: user.email,
+    mobile: user.mobile,
     name: user.name,
     designation: user.designation,
     role: user.role,
@@ -43,9 +45,10 @@ export async function verifyAuthToken(token: string): Promise<AuthUser | null> {
     if (
       !payload.sub ||
       typeof payload.email !== "string" ||
+      typeof payload.mobile !== "string" ||
       typeof payload.name !== "string" ||
       typeof payload.designation !== "string" ||
-      (payload.role !== "admin" && payload.role !== "staff")
+      (payload.role !== "admin" && payload.role !== "staff" && payload.role !== "customer")
     ) {
       return null;
     }
@@ -53,6 +56,7 @@ export async function verifyAuthToken(token: string): Promise<AuthUser | null> {
     return {
       id: payload.sub,
       email: payload.email,
+      mobile: payload.mobile,
       name: payload.name,
       designation: payload.designation,
       role: payload.role,

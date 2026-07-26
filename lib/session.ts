@@ -26,6 +26,7 @@ export async function getCurrentUser() {
   return {
     id: dbUser.id,
     email: dbUser.email,
+    mobile: dbUser.mobile,
     name: dbUser.name,
     designation: dbUser.designation,
     role: dbUser.role,
