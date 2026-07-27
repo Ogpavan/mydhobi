@@ -149,37 +149,9 @@ html.customer-dark [class*="text-[#9a9ba7]"] {
   color: #b7b8ca !important;
 }
 
-/* Customer screens use larger type and touch targets than the dense admin UI. */
+/* Keep customer controls easy to tap without changing the established type scale. */
 .customer-app {
   min-height: 100vh;
-  font-size: 14px;
-}
-
-.customer-app [class*="text-[7px]"],
-.customer-app [class*="text-[8px]"],
-.customer-app [class*="text-[9px]"] {
-  font-size: 12px;
-}
-
-.customer-app [class*="text-[10px]"] {
-  font-size: 13px;
-}
-
-.customer-app [class*="text-[11px]"] {
-  font-size: 14px;
-}
-
-.customer-app [class*="text-[12px]"] {
-  font-size: 15px;
-}
-
-.customer-app [class*="text-[13px]"] {
-  font-size: 16px;
-}
-
-.customer-app [class*="text-[14px]"],
-.customer-app [class*="text-[15px]"] {
-  font-size: 17px;
 }
 
 .customer-app button {
@@ -194,7 +166,6 @@ html.customer-dark [class*="text-[#9a9ba7]"] {
 .customer-app select,
 .customer-app textarea {
   min-height: 44px;
-  font-size: 14px;
 }
 
 html.customer-dark [class*="border-[#e"],
