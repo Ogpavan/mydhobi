@@ -1,0 +1,203 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --accent: 174 80% 40%;
+    --accent-foreground: 0 0% 100%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+.navigation-loader {
+  pointer-events: none;
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 9999;
+  height: 3px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.navigation-loader[data-visible="true"] {
+  opacity: 1;
+}
+
+.navigation-loader__bar {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #075dff 0%, #14b8a6 72%, #73e4da 100%);
+  box-shadow: 0 0 10px rgba(7, 93, 255, 0.55);
+  transition: transform 180ms ease-out;
+}
+
+.navigation-loader__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+  animation: navigation-loader-shine 900ms linear infinite;
+}
+
+@keyframes navigation-loader-shine {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(335%);
+  }
+}
+
+@keyframes dialog-enter-from-top {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 64px)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-exit-to-top {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 36px)) scale(0.98);
+  }
+}
+
+.dialog-content[data-state="open"] {
+  animation: dialog-enter-from-top 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dialog-content[data-state="closed"] {
+  animation: dialog-exit-to-top 150ms ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigation-loader,
+  .navigation-loader__bar {
+    transition-duration: 1ms;
+  }
+
+  .navigation-loader__bar::after {
+    animation: none;
+  }
+
+  .dialog-content[data-state] {
+    animation-duration: 1ms;
+  }
+}
+
+html.customer-dark body {
+  background: #111322;
+  color: #f4f1ff;
+}
+
+html.customer-dark [class*="bg-[#fafafe]"],
+html.customer-dark [class*="bg-white"] {
+  background-color: #171a2b !important;
+}
+
+html.customer-dark [class*="text-[#17182c]"],
+html.customer-dark [class*="text-[#4e5060]"],
+html.customer-dark [class*="text-[#555768]"],
+html.customer-dark [class*="text-[#666879]"] {
+  color: #f4f1ff !important;
+}
+
+html.customer-dark [class*="text-[#77798a]"],
+html.customer-dark [class*="text-[#858796]"],
+html.customer-dark [class*="text-[#9293a0]"],
+html.customer-dark [class*="text-[#9a9ba7]"] {
+  color: #b7b8ca !important;
+}
+
+/* Customer screens use larger type and touch targets than the dense admin UI. */
+.customer-app {
+  min-height: 100vh;
+  font-size: 14px;
+}
+
+.customer-app [class*="text-[7px]"],
+.customer-app [class*="text-[8px]"],
+.customer-app [class*="text-[9px]"] {
+  font-size: 12px;
+}
+
+.customer-app [class*="text-[10px]"] {
+  font-size: 13px;
+}
+
+.customer-app [class*="text-[11px]"] {
+  font-size: 14px;
+}
+
+.customer-app [class*="text-[12px]"] {
+  font-size: 15px;
+}
+
+.customer-app [class*="text-[13px]"] {
+  font-size: 16px;
+}
+
+.customer-app [class*="text-[14px]"],
+.customer-app [class*="text-[15px]"] {
+  font-size: 17px;
+}
+
+.customer-app button {
+  min-height: 40px;
+}
+
+.customer-app a[class*="flex"] {
+  min-height: 40px;
+}
+
+.customer-app input,
+.customer-app select,
+.customer-app textarea {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+html.customer-dark [class*="border-[#e"],
+html.customer-dark [class*="border-[#d"] {
+  border-color: #34384d !important;
+}
