@@ -1,8 +1,7 @@
-import { AdminReports } from "@/components/admin/reports-admin";
-import { getReportData } from "@/lib/reports";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminReportsClient } from "@/components/admin/admin-client-pages";
 
-export default async function ReportsPage() {
-  return <AdminReports initialReport={await getReportData(30)} />;
+export default function ReportsPage() {
+  return <AdminReportsClient />;
 }

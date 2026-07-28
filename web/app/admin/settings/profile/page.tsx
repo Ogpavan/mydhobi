@@ -1,10 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { AdminProfileForm } from "@/components/admin/admin-profile-form";
-import { getCurrentUser } from "@/lib/session";
+import { AdminProfileClient } from "@/components/admin/admin-client-pages";
 
-export default async function AdminProfilePage() {
-  const user=await getCurrentUser();
-  if(!user||user.role==="customer")redirect("/");
-  return <AdminProfileForm user={user} />;
+export default function AdminProfilePage() {
+  return <AdminProfileClient />;
 }

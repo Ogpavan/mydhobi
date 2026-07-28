@@ -1,24 +1,7 @@
-import { StoreForm } from "@/components/admin/store-form";
-import { listSetupCities, listSetupStates } from "@/lib/locations";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminStoreCreateClient } from "@/components/admin/admin-client-pages";
 
-export default async function CreateStorePage() {
-  const [states, cities] = await Promise.all([
-    listSetupStates(),
-    listSetupCities(),
-  ]);
-  const activeStates = states.filter((state) => state.isActive);
-  const activeStateIds = new Set(activeStates.map((state) => state.id));
-  const activeCities = cities.filter(
-    (city) => city.isActive && activeStateIds.has(city.stateId),
-  );
-
-  return (
-    <StoreForm
-      mode="create"
-      locationStates={activeStates}
-      locationCities={activeCities}
-    />
-  );
+export default function CreateStorePage() {
+  return <AdminStoreCreateClient />;
 }

@@ -1,17 +1,7 @@
-import { notFound } from "next/navigation";
+"use client";
 
-import { AdminOrderDetails } from "@/components/admin/orders-admin";
-import { getAdminOrder } from "@/lib/admin-orders";
+import { AdminOrderDetailsClient } from "@/components/admin/admin-client-pages";
 
-export const dynamic = "force-dynamic";
-
-export default async function AdminOrderDetailsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const order = await getAdminOrder(id);
-  if (!order) notFound();
-  return <AdminOrderDetails initialOrder={order} />;
+export default function AdminOrderDetailsPage() {
+  return <AdminOrderDetailsClient />;
 }

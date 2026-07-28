@@ -1,8 +1,7 @@
-import { AdminRiders } from "@/components/admin/riders-admin";
-import { listRiders } from "@/lib/riders";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminRidersClient } from "@/components/admin/admin-client-pages";
 
-export default async function RidersPage() {
-  return <AdminRiders initialRiders={await listRiders()} />;
+export default function RidersPage() {
+  return <AdminRidersClient />;
 }

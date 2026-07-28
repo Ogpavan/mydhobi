@@ -1,12 +1,7 @@
-import { AdminOrdersList } from "@/components/admin/orders-admin";
-import { getAdminOrderStats, listAdminOrders } from "@/lib/admin-orders";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminOrdersClient } from "@/components/admin/admin-client-pages";
 
-export default async function OrdersPage() {
-  const [orders, stats] = await Promise.all([
-    listAdminOrders(),
-    getAdminOrderStats(),
-  ]);
-  return <AdminOrdersList initialOrders={orders} stats={stats} />;
+export default function OrdersPage() {
+  return <AdminOrdersClient />;
 }

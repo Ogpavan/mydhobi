@@ -1,23 +1,7 @@
-import { notFound } from "next/navigation";
+"use client";
 
-import { StoreForm } from "@/components/admin/store-form";
-import { getStoreById } from "@/lib/stores";
+import { AdminStoreEditClient } from "@/components/admin/admin-client-pages";
 
-export const dynamic = "force-dynamic";
-
-type EditStorePageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
-export default async function EditStorePage({ params }: EditStorePageProps) {
-  const { id } = await params;
-  const store = await getStoreById(id);
-
-  if (!store) {
-    notFound();
-  }
-
-  return <StoreForm mode="edit" store={store} />;
+export default function EditStorePage() {
+  return <AdminStoreEditClient />;
 }

@@ -1,14 +1,7 @@
-import { AdminComplaints } from "@/components/admin/complaints-admin";
-import { getComplaintStats, listComplaints } from "@/lib/support";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminComplaintsClient } from "@/components/admin/admin-client-pages";
 
-export default async function ComplaintsPage() {
-  const [complaints, stats] = await Promise.all([
-    listComplaints(),
-    getComplaintStats(),
-  ]);
-  return (
-    <AdminComplaints initialComplaints={complaints} initialStats={stats} />
-  );
+export default function ComplaintsPage() {
+  return <AdminComplaintsClient />;
 }

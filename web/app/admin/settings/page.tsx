@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { AdminClientRedirect } from "@/components/admin/admin-client-redirect";
 
 export default function SettingsPage() {
-  redirect("/admin/settings/basic-setup");
+  return <AdminClientRedirect href="/admin/settings/basic-setup" />;
 }

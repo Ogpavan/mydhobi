@@ -1,17 +1,7 @@
-import { notFound } from "next/navigation";
+"use client";
 
-import { AdminRiderDetails } from "@/components/admin/riders-admin";
-import { getRider } from "@/lib/riders";
+import { AdminRiderDetailsClient } from "@/components/admin/admin-client-pages";
 
-export const dynamic = "force-dynamic";
-
-export default async function RiderDetailsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const rider = await getRider(id);
-  if (!rider) notFound();
-  return <AdminRiderDetails initialRider={rider} />;
+export default function RiderDetailsPage() {
+  return <AdminRiderDetailsClient />;
 }

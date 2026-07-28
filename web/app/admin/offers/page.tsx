@@ -1,8 +1,7 @@
-import { AdminOffers } from "@/components/admin/offers-admin";
-import { listOffers } from "@/lib/offers";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminOffersClient } from "@/components/admin/admin-client-pages";
 
-export default async function OffersPage() {
-  return <AdminOffers initialOffers={await listOffers()} />;
+export default function OffersPage() {
+  return <AdminOffersClient />;
 }

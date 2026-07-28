@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminHeader } from "@/components/admin/admin-header";
+import { AdminAppPreloader } from "@/components/admin/admin-app-preloader";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import type { AuthUser } from "@/lib/auth";
@@ -17,6 +18,10 @@ export function AdminShell({
 }) {
   return (
     <SidebarProvider defaultOpen>
+      <AdminAppPreloader
+        sidebarItems={sidebarItems}
+        showAdminRoutes={user.role === "admin"}
+      />
       <div className="min-h-screen bg-[#FBFDFF]">
         <AdminSidebar
           className="fixed inset-y-0 left-0 z-40 hidden lg:flex"

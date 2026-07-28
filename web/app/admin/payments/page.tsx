@@ -1,12 +1,7 @@
-import { AdminPayments } from "@/components/admin/payments-admin";
-import { getPaymentStats, listPayments } from "@/lib/payments";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminPaymentsClient } from "@/components/admin/admin-client-pages";
 
-export default async function PaymentsPage() {
-  const [payments, stats] = await Promise.all([
-    listPayments(),
-    getPaymentStats(),
-  ]);
-  return <AdminPayments initialPayments={payments} stats={stats} />;
+export default function PaymentsPage() {
+  return <AdminPaymentsClient />;
 }

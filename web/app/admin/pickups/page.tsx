@@ -1,23 +1,7 @@
-import { AdminPickups } from "@/components/admin/pickups-admin";
-import {
-  getPickupStats,
-  listPickupRiders,
-  listPickupTasks,
-} from "@/lib/pickups";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminPickupsClient } from "@/components/admin/admin-client-pages";
 
-export default async function PickupsPage() {
-  const [pickups, riders, stats] = await Promise.all([
-    listPickupTasks(),
-    listPickupRiders(),
-    getPickupStats(),
-  ]);
-  return (
-    <AdminPickups
-      initialPickups={pickups}
-      riders={riders}
-      stats={stats}
-    />
-  );
+export default function PickupsPage() {
+  return <AdminPickupsClient />;
 }

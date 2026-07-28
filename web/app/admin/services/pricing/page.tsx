@@ -1,9 +1,7 @@
-import { ServicePricingAdmin } from "@/components/admin/service-catalog-admin";
-import { listCatalogServices } from "@/lib/service-catalog";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminServicePricingClient } from "@/components/admin/admin-client-pages";
 
-export default async function ServicePricingPage() {
-  const services = await listCatalogServices(true);
-  return <ServicePricingAdmin initialServices={services} />;
+export default function ServicePricingPage() {
+  return <AdminServicePricingClient />;
 }

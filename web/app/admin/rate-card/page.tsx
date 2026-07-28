@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { AdminClientRedirect } from "@/components/admin/admin-client-redirect";
 
 export default function RateCardPage() {
-  redirect("/admin/services/pricing");
+  return <AdminClientRedirect href="/admin/services/pricing" />;
 }

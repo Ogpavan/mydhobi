@@ -1,14 +1,15 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Smartphone } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { startNavigationProgress } from "@/components/navigation-loader";
+
+const inputClassName =
+  "h-12 w-full rounded-[10px] border border-[#ddd9e8] bg-white text-sm text-[#25213a] outline-none transition placeholder:text-[#a09bad] focus:border-[#7440dc] focus:ring-2 focus:ring-[#7440dc]/10";
 
 export default function HomePage() {
   const router = useRouter();
@@ -28,9 +29,7 @@ export default function HomePage() {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mobile, password }),
       });
       const data = (await response.json()) as {
@@ -45,12 +44,11 @@ export default function HomePage() {
 
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get("redirect");
-
-      startNavigationProgress();
       const isCustomer = data.user?.role === "customer";
       const safeRedirect = isCustomer
         ? redirectTo?.startsWith("/customer") ? redirectTo : "/customer"
         : redirectTo?.startsWith("/admin") ? redirectTo : "/admin/dashboard";
+      startNavigationProgress();
       router.replace(safeRedirect);
       router.refresh();
     } catch {
@@ -61,152 +59,85 @@ export default function HomePage() {
   }
 
   return (
-    <main className="h-[100svh] overflow-hidden bg-[#F6F9FF] text-[#071333]">
-      <div className="grid h-full w-full overflow-hidden lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="relative hidden flex-col overflow-hidden bg-[#F4F8FF] px-5 py-5 sm:px-6 sm:py-6 lg:flex lg:px-8 lg:py-7">
-          <Image
-            src="/login-illustration.png"
-            alt=""
-            fill
-            priority
-            aria-hidden="true"
-            className="object-cover object-center opacity-100"
-          />
-          <div className="absolute inset-0 bg-[#F4F8FF]/18" />
-          <div className="absolute left-0 top-0 h-48 w-48 rounded-full bg-white/35 blur-3xl" />
-          <div className="absolute right-14 top-16 h-16 w-16 rounded-full border border-white/50 bg-white/20 blur-[0.5px]" />
-          <div className="absolute right-32 top-28 h-8 w-8 rounded-full border border-[#CFE0FF] bg-white/35" />
-          <div className="absolute left-20 top-40 h-10 w-10 rounded-full border border-[#D5E6FF] bg-white/35" />
+    <AuthShell title="Welcome Back 👋">
+      <h2 className="text-lg font-bold">Sign In</h2>
 
-          <div className="relative z-10 flex items-center gap-3">
-            <Image src="/logo.png" alt="MyDhobi logo" width={52} height={52} className="h-11 w-11 object-contain" />
-            <div>
-              <p className="text-[21px] font-semibold leading-none tracking-normal text-[#0B1E57]">
-                MyDhobi
-              </p>
-              <p className="mt-1 text-[13px] font-normal text-[#5A6B8C]">
-                Laundry & Dry Cleaning Management
-              </p>
-            </div>
-          </div>
+      <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+        <label className="block text-xs font-semibold text-[#4d485c]">
+          Mobile Number
+          <span className="relative mt-2 flex">
+            <span className="absolute inset-y-0 left-0 flex w-[86px] items-center gap-2 border-r border-[#e5e1eb] pl-3 text-sm font-medium text-[#403a50]">
+              <Smartphone className="h-4 w-4 text-[#716b82]" />
+              +91
+            </span>
+            <input
+              name="mobile"
+              type="tel"
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              maxLength={10}
+              onInput={(event) => {
+                event.currentTarget.value = event.currentTarget.value
+                  .replace(/\D/g, "")
+                  .slice(0, 10);
+              }}
+              className={`${inputClassName} pl-[100px] pr-3`}
+              placeholder="Enter mobile number"
+              autoComplete="tel"
+              required
+            />
+          </span>
+        </label>
 
-          <div className="relative z-10 mt-7 hidden max-w-[560px] lg:block">
-            <h1 className="max-w-[430px] text-[44px] font-semibold leading-[0.98] tracking-normal text-[#0B1E57] xl:text-[48px]">
-              Run your dhobi business easily
-            </h1>
-            <p className="mt-3 max-w-[500px] text-[14px] font-normal leading-[1.5] text-[#5A6B8C]">
-              Manage orders, pickups, deliveries, and payments from one simple dashboard.
-            </p>
-          </div>
-
-          <div className="relative z-10 flex-1" />
-        </section>
-
-        <section className="flex items-center justify-center bg-[#F7FAFF] px-4 py-4 sm:px-6 lg:px-8">
-          <div className="w-full max-w-[440px] px-2 py-2 sm:px-0 lg:px-0">
-            <div className="flex flex-col items-center text-center">
-              <h2 className="mt-2 text-[34px] font-semibold leading-[1] tracking-normal text-[#0B1E57]">
-                Welcome back
-              </h2>
-              <p className="mt-2 text-[14px] font-normal text-[#5A6B8C]">
-                Sign in to continue to your dashboard
-              </p>
-            </div>
-
-            <form
-              className="mt-8 space-y-4"
-              onSubmit={handleSubmit}
+        <label className="block text-xs font-semibold text-[#4d485c]">
+          Password
+          <span className="relative mt-2 flex">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#716b82]" />
+            <input
+              name="password"
+              type={showPassword ? "text" : "password"}
+              className={`${inputClassName} pl-10 pr-11`}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#716b82] hover:bg-[#f4f0fb] hover:text-[#7440dc]"
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
-              <div className="space-y-1.5">
-                <label className="text-[13px] font-medium text-[#0B1E57]">
-                  Mobile Number
-                </label>
-                <div className="relative">
-                  <Smartphone className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7A95]" />
-                  <Input
-                    name="mobile"
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]{10}"
-                    maxLength={10}
-                    onInput={(event) => {
-                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "").slice(0, 10);
-                    }}
-                    className="h-[36px] rounded border-[#DCE6F2] pl-11 pr-4 text-sm font-normal shadow-none focus-visible:border-[#075DFF] focus-visible:ring-1 focus-visible:ring-[#075DFF]/20"
-                    placeholder="Enter 10-digit mobile number"
-                    autoComplete="tel"
-                    required
-                  />
-                </div>
-              </div>
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </span>
+        </label>
 
-              <div className="space-y-1.5">
-                <label className="text-[13px] font-medium text-[#0B1E57]">Password</label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7A95]" />
-                  <Input
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    className="h-[36px] rounded border-[#DCE6F2] pl-11 pr-12 text-sm font-normal shadow-none focus-visible:border-[#075DFF] focus-visible:ring-1 focus-visible:ring-[#075DFF]/20"
-                    placeholder="Enter your password"
-                    autoComplete="current-password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((value) => !value)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B7A95] transition-colors hover:text-[#075DFF]"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
+        <div className="flex justify-end">
+          <Link href="/forgot-password" className="text-xs font-semibold text-[#7440dc] hover:underline">
+            Forgot Password?
+          </Link>
+        </div>
 
-              <div className="flex items-center justify-between gap-4 text-[13px]">
-                <label className="flex items-center gap-2 text-[#0B1E57]">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="h-4 w-4 rounded border-[#BFD0FF] text-[#075DFF] focus:ring-[#075DFF]"
-                  />
-                  Remember me
-                </label>
-                <Link href="/forgot-password" className="font-medium text-[#075DFF] hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
+        {error ? (
+          <p className="rounded-[8px] bg-red-50 px-3 py-2 text-xs text-red-700">
+            {error}
+          </p>
+        ) : null}
 
-              {error ? (
-                <p className="rounded border border-red-100 bg-red-50 px-3 py-2 text-[13px] font-normal text-red-700">
-                  {error}
-                </p>
-              ) : null}
+        <button
+          disabled={isSubmitting}
+          className="h-12 w-full rounded-[10px] bg-[linear-gradient(100deg,#9454f4,#7040dc)] text-sm font-bold text-white shadow-[0_8px_20px_rgba(116,64,220,0.25)] transition hover:brightness-95 disabled:opacity-60"
+        >
+          {isSubmitting ? "Signing In..." : "Sign In"}
+        </button>
+      </form>
 
-              <Button
-                disabled={isSubmitting}
-                className="h-[34px] w-full rounded bg-[#075DFF] px-3 text-[13px] font-medium shadow-[0_8px_18px_rgba(7,93,255,0.2)] hover:bg-[#064FEB]"
-              >
-                {isSubmitting ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-
-            <p className="mt-5 text-center text-[13px] text-[#5A6B8C]">
-              New customer?{" "}
-              <Link href="/register" className="font-medium text-[#075DFF] hover:underline">
-                Create account
-              </Link>
-            </p>
-
-            <div className="mt-6 flex items-center justify-center gap-2 text-[13px] text-[#5A6B8C]">
-              <span>Need help?</span>
-              <a href="tel:+919876543210" className="font-medium text-[#075DFF] hover:underline">
-                Contact support
-              </a>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
+      <p className="mt-6 text-center text-xs text-[#777184]">
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="font-bold text-[#7440dc] hover:underline">
+          Sign Up
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

@@ -1,8 +1,7 @@
-import { AdminReferrals } from "@/components/admin/referrals-admin";
-import { listReferrals } from "@/lib/referrals";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminReferralsClient } from "@/components/admin/admin-client-pages";
 
-export default async function ReferralsPage() {
-  return <AdminReferrals referrals={await listReferrals()} />;
+export default function ReferralsPage() {
+  return <AdminReferralsClient />;
 }

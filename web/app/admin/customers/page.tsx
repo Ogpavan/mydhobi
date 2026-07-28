@@ -1,15 +1,7 @@
-import { CustomersView } from "@/components/admin/customers-view";
-import { listCustomers } from "@/lib/customers";
-import { getCurrentUser } from "@/lib/session";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminCustomersClient } from "@/components/admin/admin-client-pages";
 
-export default async function CustomersPage() {
-  const [customers, user] = await Promise.all([listCustomers(), getCurrentUser()]);
-  return (
-    <CustomersView
-      initialCustomers={customers}
-      canManageWallet={user?.role === "admin"}
-    />
-  );
+export default function CustomersPage() {
+  return <AdminCustomersClient />;
 }

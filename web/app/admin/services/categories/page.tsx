@@ -1,9 +1,7 @@
-import { ServiceCategoriesAdmin } from "@/components/admin/service-catalog-admin";
-import { listServiceCategories } from "@/lib/service-catalog";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { AdminServiceCategoriesClient } from "@/components/admin/admin-client-pages";
 
-export default async function ServiceCategoriesPage() {
-  const categories = await listServiceCategories(true);
-  return <ServiceCategoriesAdmin initialCategories={categories} />;
+export default function ServiceCategoriesPage() {
+  return <AdminServiceCategoriesClient />;
 }

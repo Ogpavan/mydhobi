@@ -1,24 +1,7 @@
-import { notFound } from "next/navigation";
+"use client";
 
-import { OperationalReportView } from "@/components/admin/operational-report-view";
-import {
-  getOperationalReport,
-  isOperationalReportKey,
-} from "@/lib/operational-reports";
+import { AdminOperationalReportClient } from "@/components/admin/admin-client-pages";
 
-export const dynamic = "force-dynamic";
-
-export default async function OperationalReportPage({
-  params,
-}: {
-  params: Promise<{ report: string }>;
-}) {
-  const { report } = await params;
-  if (!isOperationalReportKey(report)) notFound();
-
-  return (
-    <OperationalReportView
-      initialReport={await getOperationalReport(report, 30)}
-    />
-  );
+export default function OperationalReportPage() {
+  return <AdminOperationalReportClient />;
 }

@@ -1,14 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { WalletReportView } from "@/components/admin/wallet-report-view";
-import { getCurrentUser } from "@/lib/session";
-import { getWalletReport } from "@/lib/wallet-report";
+import { AdminWalletReportClient } from "@/components/admin/admin-client-pages";
 
-export const dynamic = "force-dynamic";
-
-export default async function WalletReportPage() {
-  const user = await getCurrentUser();
-  if (user?.role !== "admin") redirect("/admin/reports");
-
-  return <WalletReportView report={await getWalletReport()} />;
+export default function WalletReportPage() {
+  return <AdminWalletReportClient />;
 }
