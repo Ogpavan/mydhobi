@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
+"use client";
 
 import { ReferEarnView } from "@/components/customer/refer-earn-view";
-
-export const metadata: Metadata = { title: { absolute: "Refer & Earn | MyDhobi" } };
 
 export default function ReferEarnPage() {
   return <ReferEarnView />;

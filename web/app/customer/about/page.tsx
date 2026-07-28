@@ -1,3 +1,5 @@
+"use client";
+
 import { CustomerBottomNav } from "@/components/customer/customer-bottom-nav";
 import { CustomerSimpleHeader } from "@/components/customer/customer-simple-header";
 

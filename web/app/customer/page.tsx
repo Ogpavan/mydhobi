@@ -1,10 +1,6 @@
-import type { Metadata } from "next";
-import { CustomerHomeClient } from "@/components/customer/customer-client-pages";
+"use client";
 
-export const metadata: Metadata = {
-  title: { absolute: "MyDhobi" },
-  description: "Track laundry orders, pickups, deliveries, and payments.",
-};
+import { CustomerHomeClient } from "@/components/customer/customer-client-pages";
 
 export default function CustomerPage() {
   return <CustomerHomeClient />;

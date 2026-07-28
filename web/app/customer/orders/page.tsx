@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
+"use client";
 
 import { CustomerOrdersClient } from "@/components/customer/customer-client-pages";
-
-export const metadata: Metadata = { title: { absolute: "My Orders | MyDhobi" } };
 
 export default function MyOrdersPage() {
   return <CustomerOrdersClient />;

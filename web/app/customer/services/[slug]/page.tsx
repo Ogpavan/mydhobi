@@ -1,3 +1,5 @@
+"use client";
+
 import { CustomerServiceDetailsClient } from "@/components/customer/customer-client-pages";
 
 export default function ServiceDetailsPage() {

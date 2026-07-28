@@ -41,6 +41,12 @@ function load<T>(url: string): Promise<T> {
   return request;
 }
 
+export function preloadCustomerData<T>(url: string): Promise<T> {
+  const cached = cache.get(url);
+  if (cached) return Promise.resolve(cached.data as T);
+  return load<T>(url);
+}
+
 export function invalidateCustomerData(...urls: string[]) {
   if (urls.length === 0) {
     cache.clear();

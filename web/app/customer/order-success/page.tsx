@@ -1,3 +1,5 @@
+"use client";
+
 import { Suspense } from "react";
 
 import { CustomerOrderSuccessClient } from "@/components/customer/customer-client-pages";
