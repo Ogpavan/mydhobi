@@ -58,6 +58,17 @@ export function ensureDeliverySchema() {
           );
           CREATE INDEX IF NOT EXISTS order_deliveries_schedule_idx
           ON order_deliveries(scheduled_at,status);
+          UPDATE riders
+          SET store_id = source.store_id
+          FROM (
+            SELECT DISTINCT ON (deliveries.rider_id)
+              deliveries.rider_id, orders.store_id
+            FROM order_deliveries deliveries
+            INNER JOIN customer_orders orders ON orders.id=deliveries.order_id
+            WHERE deliveries.rider_id IS NOT NULL AND orders.store_id IS NOT NULL
+            ORDER BY deliveries.rider_id, deliveries.scheduled_at DESC
+          ) source
+          WHERE riders.id=source.rider_id AND riders.store_id IS NULL;
         `),
       )
       .then(() => undefined)
@@ -95,11 +106,11 @@ function statusFromValue(value: unknown): DeliveryStatus {
     : "Ready";
 }
 
-export async function listDeliveryRiders(): Promise<PickupRider[]> {
-  return listPickupRiders();
+export async function listDeliveryRiders(storeId?: string | null): Promise<PickupRider[]> {
+  return listPickupRiders(storeId);
 }
 
-export async function listDeliveryTasks() {
+export async function listDeliveryTasks(storeId?: string | null) {
   await syncDeliveryTasks();
   const { rows } = await pool.query(
     `SELECT deliveries.id,deliveries.order_id,deliveries.scheduled_at,
@@ -111,9 +122,11 @@ export async function listDeliveryTasks() {
      INNER JOIN customer_orders orders ON orders.id=deliveries.order_id
      INNER JOIN app_users users ON users.id=orders.user_id
      LEFT JOIN riders ON riders.id=deliveries.rider_id
+     WHERE ($1::uuid IS NULL OR orders.store_id=$1)
      ORDER BY
        CASE WHEN deliveries.status='Delivered' THEN 1 ELSE 0 END,
        deliveries.scheduled_at`,
+    [storeId ?? null],
   );
   return rows.map(
     (row): DeliveryTask => ({
@@ -134,21 +147,23 @@ export async function listDeliveryTasks() {
   );
 }
 
-export async function getDeliveryStats(): Promise<DeliveryStats> {
+export async function getDeliveryStats(storeId?: string | null): Promise<DeliveryStats> {
   await syncDeliveryTasks();
   const { rows } = await pool.query(`
     SELECT
       COUNT(*) FILTER (
-        WHERE scheduled_at >= date_trunc('day',NOW())
-          AND scheduled_at < date_trunc('day',NOW()) + interval '1 day'
+        WHERE deliveries.scheduled_at >= date_trunc('day',NOW())
+          AND deliveries.scheduled_at < date_trunc('day',NOW()) + interval '1 day'
       )::int AS today,
-      COUNT(*) FILTER (WHERE status='Delivered')::int AS delivered,
-      COUNT(*) FILTER (WHERE status NOT IN ('Delivered','Failed'))::int AS pending,
+      COUNT(*) FILTER (WHERE deliveries.status='Delivered')::int AS delivered,
+      COUNT(*) FILTER (WHERE deliveries.status NOT IN ('Delivered','Failed'))::int AS pending,
       COUNT(*) FILTER (
-        WHERE rider_id IS NULL AND status NOT IN ('Delivered','Failed')
+        WHERE deliveries.rider_id IS NULL AND deliveries.status NOT IN ('Delivered','Failed')
       )::int AS unassigned
-    FROM order_deliveries
-  `);
+    FROM order_deliveries deliveries
+    INNER JOIN customer_orders orders ON orders.id=deliveries.order_id
+    WHERE ($1::uuid IS NULL OR orders.store_id=$1)
+  `, [storeId ?? null]);
   return {
     today: Number(rows[0].today),
     delivered: Number(rows[0].delivered),
@@ -173,6 +188,7 @@ export async function updateDeliveryTask(
     scheduledAt?: string;
     notes?: string;
   },
+  storeId?: string | null,
 ) {
   await syncDeliveryTasks();
   const client = await pool.connect();
@@ -182,8 +198,8 @@ export async function updateDeliveryTask(
       `SELECT deliveries.*,orders.user_id,orders.status AS order_status
        FROM order_deliveries deliveries
        INNER JOIN customer_orders orders ON orders.id=deliveries.order_id
-       WHERE deliveries.id=$1 FOR UPDATE`,
-      [id],
+       WHERE deliveries.id=$1 AND ($2::uuid IS NULL OR orders.store_id=$2) FOR UPDATE`,
+      [id, storeId ?? null],
     );
     if (!currentResult.rows[0]) {
       await client.query("ROLLBACK");
@@ -284,7 +300,7 @@ export async function updateDeliveryTask(
     }
 
     await client.query("COMMIT");
-    const tasks = await listDeliveryTasks();
+    const tasks = await listDeliveryTasks(storeId);
     return {
       kind: "updated" as const,
       delivery: tasks.find((task) => task.id === id) ?? null,

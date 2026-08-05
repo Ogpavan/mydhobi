@@ -15,21 +15,23 @@ export const runtime = "nodejs";
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Context) {
-  if (!(await getCurrentUser())) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  const item = await getInventoryItemById((await params).id);
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer") return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const item = await getInventoryItemById((await params).id, user.role === "store_manager" ? user.storeId : null);
   return item
     ? NextResponse.json({ item })
     : NextResponse.json({ message: "Item not found." }, { status: 404 });
 }
 
 export async function PATCH(request: Request, { params }: Context) {
-  if (!(await getCurrentUser())) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer" || (user.role === "store_manager" && !user.storeId)) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   try {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     if (Object.keys(body).length === 1 &&
         (body.status === "active" || body.status === "inactive")) {
-      const item = await updateInventoryItemStatus(id, body.status);
+      const item = await updateInventoryItemStatus(id, body.status, user.role === "store_manager" ? user.storeId : null);
       return item
         ? NextResponse.json({ item })
         : NextResponse.json({ message: "Item not found." }, { status: 404 });
@@ -43,7 +45,7 @@ export async function PATCH(request: Request, { params }: Context) {
         { status: 400 },
       );
     }
-    const item = await updateInventoryItem(id, payload);
+    const item = await updateInventoryItem(id, payload, user.role === "store_manager" ? user.storeId : null);
     return item
       ? NextResponse.json({ item })
       : NextResponse.json({ message: "Item not found." }, { status: 404 });
@@ -54,9 +56,10 @@ export async function PATCH(request: Request, { params }: Context) {
 }
 
 export async function DELETE(_request: Request, { params }: Context) {
-  if (!(await getCurrentUser())) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer" || (user.role === "store_manager" && !user.storeId)) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   try {
-    return await deleteInventoryItem((await params).id)
+    return await deleteInventoryItem((await params).id, user.role === "store_manager" ? user.storeId : null)
       ? NextResponse.json({ ok: true })
       : NextResponse.json({ message: "Item not found." }, { status: 404 });
   } catch (error) {

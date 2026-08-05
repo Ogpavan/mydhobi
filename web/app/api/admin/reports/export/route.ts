@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     return Response.json({ message: "Unauthorized" }, { status: 401 });
   }
   const range = normalizeReportRange(new URL(request.url).searchParams.get("range"));
-  const csv = await createOrdersCsv(range);
+  const csv = await createOrdersCsv(range, user.role === "store_manager" ? user.storeId : null);
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",

@@ -11,5 +11,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const range = normalizeReportRange(new URL(request.url).searchParams.get("range"));
-  return NextResponse.json({ report: await getReportData(range) });
+  return NextResponse.json({
+    report: await getReportData(range, user.role === "store_manager" ? user.storeId : null),
+  });
 }

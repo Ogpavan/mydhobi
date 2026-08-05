@@ -6,6 +6,50 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(JWT_COOKIE_NAME)?.value;
   const user = token ? await verifyAuthToken(token) : null;
+  const storeManagerPages = [
+    "/admin/dashboard",
+    "/admin/orders",
+    "/admin/customers",
+    "/admin/pickups",
+    "/admin/deliveries",
+    "/admin/inventory",
+    "/admin/riders",
+    "/admin/payments",
+    "/admin/complaints",
+    "/admin/reports",
+    "/admin/settings/profile",
+  ];
+  const storeManagerApis = [
+    "/api/admin/page-data",
+    "/api/admin/orders",
+    "/api/admin/customers",
+    "/api/admin/pickups",
+    "/api/admin/deliveries",
+    "/api/admin/riders",
+    "/api/admin/payments",
+    "/api/admin/reports",
+    "/api/admin/complaints",
+    "/api/admin/alerts",
+    "/api/admin/profile",
+    "/api/customers",
+    "/api/inventory",
+    "/api/developer/sidebar-icons",
+  ];
+  if (user?.role === "store_manager" && user.storeId) {
+    storeManagerApis.push(`/api/stores/${user.storeId}/team`);
+  }
+  const startsWithRoute = (routes: string[]) => routes.some((route) =>
+    pathname === route || pathname.startsWith(`${route}/`),
+  );
+
+  if (user?.role === "store_manager" &&
+      ((pathname.startsWith("/admin") && !startsWithRoute(storeManagerPages)) ||
+        (pathname.startsWith("/api/") && !startsWithRoute(storeManagerApis)))) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+  }
 
   const isAdminApi = pathname.startsWith("/api/") &&
     !pathname.startsWith("/api/auth/") &&

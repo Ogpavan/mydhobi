@@ -15,9 +15,9 @@ export async function GET() {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const [deliveries, riders, stats] = await Promise.all([
-    listDeliveryTasks(),
-    listDeliveryRiders(),
-    getDeliveryStats(),
+    listDeliveryTasks(user.role === "store_manager" ? user.storeId : null),
+    listDeliveryRiders(user.role === "store_manager" ? user.storeId : null),
+    getDeliveryStats(user.role === "store_manager" ? user.storeId : null),
   ]);
   return NextResponse.json({ deliveries, riders, stats });
 }

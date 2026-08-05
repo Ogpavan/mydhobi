@@ -18,10 +18,10 @@ function isUniqueViolation(error: unknown) {
 
 export async function GET() {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (!user || user.role === "customer") return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
   try {
-    return NextResponse.json({ customers: await listCustomers() });
+    return NextResponse.json({ customers: await listCustomers(user.role === "store_manager" ? user.storeId : null) });
   } catch (error) {
     console.error("List customers failed", error);
     return NextResponse.json(
@@ -33,7 +33,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (!user || user.role === "customer" || (user.role === "store_manager" && !user.storeId)) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const body = await request.json() as Record<string, unknown>;
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
     const passwordHash = password ? await bcrypt.hash(password, 12) : null;
 
     return NextResponse.json(
-      { customer: await createCustomer(payload, passwordHash) },
+      { customer: await createCustomer(payload, passwordHash, user.role === "store_manager" ? user.storeId : null) },
       { status: 201 },
     );
   } catch (error) {

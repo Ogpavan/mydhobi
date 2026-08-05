@@ -29,7 +29,11 @@ export async function GET(
       new URL(request.url).searchParams.get("range"),
     );
     return NextResponse.json({
-      report: await getOperationalReport(report, range),
+      report: await getOperationalReport(
+        report,
+        range,
+        user.role === "store_manager" ? user.storeId : null,
+      ),
     });
   } catch (error) {
     console.error(`Load ${report} report failed`, error);

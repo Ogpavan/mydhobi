@@ -25,7 +25,8 @@ export async function GET(
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const order = await getAdminOrder(id);
+  const user = await getAdminUser();
+  const order = await getAdminOrder(id, user?.role === "store_manager" ? user.storeId : null);
   if (!order) {
     return NextResponse.json({ message: "Order not found." }, { status: 404 });
   }
@@ -55,10 +56,12 @@ export async function PATCH(
       );
     }
 
+    const user = await getAdminUser();
     const result = await updateAdminOrderStatus(
       id,
       status as PortalOrderStatus,
       note,
+      user?.role === "store_manager" ? user.storeId : null,
     );
     if (result.kind === "not_found") {
       return NextResponse.json({ message: "Order not found." }, { status: 404 });

@@ -19,20 +19,21 @@ function isUniqueViolation(error: unknown) {
   );
 }
 
-async function isAdmin() {
+async function getAdminUser() {
   const user = await getCurrentUser();
-  return Boolean(user && user.role !== "customer");
+  return user && user.role !== "customer" ? user : null;
 }
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!(await isAdmin())) {
+  const user = await getAdminUser();
+  if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const rider = await getRider(id);
+  const rider = await getRider(id, user.role === "store_manager" ? user.storeId : null);
   return rider
     ? NextResponse.json({ rider })
     : NextResponse.json({ message: "Rider not found." }, { status: 404 });
@@ -42,13 +43,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!(await isAdmin())) {
+  const user = await getAdminUser();
+  if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   try {
     const { id } = await params;
     const body = (await request.json()) as Record<string, unknown>;
-    const current = await getRider(id);
+    const current = await getRider(id, user.role === "store_manager" ? user.storeId : null);
     if (!current) {
       return NextResponse.json({ message: "Rider not found." }, { status: 404 });
     }
@@ -88,7 +90,13 @@ export async function PATCH(
       );
     }
 
-    const rider = await updateRider(id, { name, mobile, area, status });
+    const rider = await updateRider(id, {
+      name,
+      mobile,
+      area,
+      status,
+      storeId: user.role === "store_manager" ? user.storeId : null,
+    });
     return NextResponse.json({ rider });
   } catch (error) {
     if (isUniqueViolation(error)) {

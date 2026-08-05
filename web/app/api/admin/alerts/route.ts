@@ -12,10 +12,10 @@ export async function GET() {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const [orders, pickups, payments, complaints] = await Promise.all([
-    listAdminOrders(),
-    listPickupTasks(),
-    listPayments(),
-    listComplaints(),
+    listAdminOrders(user.role === "store_manager" ? user.storeId : null),
+    listPickupTasks(user.role === "store_manager" ? user.storeId : null),
+    listPayments(user.role === "store_manager" ? user.storeId : null),
+    listComplaints(user.role === "store_manager" ? user.storeId : null),
   ]);
   const alerts = [
     ...orders.filter((item) => item.status === "New").slice(0, 5).map((item) => ({

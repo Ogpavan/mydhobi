@@ -87,7 +87,7 @@ function base(
   return { key, title: titles[key], range, ...data };
 }
 
-async function orderReport(range: OperationalReportRange) {
+async function orderReport(range: OperationalReportRange, storeId?: string | null) {
   await ensureCustomerPortalSchema();
   const [summaryResult, rowsResult] = await Promise.all([
     pool.query(
@@ -96,8 +96,9 @@ async function orderReport(range: OperationalReportRange) {
         COUNT(*) FILTER (WHERE status NOT IN ('Delivered','Cancelled'))::int AS pending,
         COUNT(*) FILTER (WHERE status='Cancelled')::int AS cancelled
        FROM customer_orders
-       WHERE created_at >= NOW() - ($1::int * interval '1 day')`,
-      [range],
+       WHERE created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR store_id=$2)`,
+      [range, storeId ?? null],
     ),
     pool.query(
       `SELECT orders.id,orders.created_at,users.name AS customer,users.mobile,
@@ -106,8 +107,9 @@ async function orderReport(range: OperationalReportRange) {
        FROM customer_orders orders
        INNER JOIN app_users users ON users.id=orders.user_id
        WHERE orders.created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)
        ORDER BY orders.created_at DESC LIMIT 2000`,
-      [range],
+      [range, storeId ?? null],
     ),
   ]);
   const summary = summaryResult.rows[0];
@@ -147,7 +149,7 @@ async function orderReport(range: OperationalReportRange) {
   });
 }
 
-async function salesReport(range: OperationalReportRange) {
+async function salesReport(range: OperationalReportRange, storeId?: string | null) {
   await ensureCustomerPortalSchema();
   const [summaryResult, rowsResult] = await Promise.all([
     pool.query(
@@ -157,8 +159,9 @@ async function salesReport(range: OperationalReportRange) {
         COALESCE(AVG(amount),0) AS average_order,
         COALESCE(SUM(amount) FILTER (WHERE payment_status<>'Paid'),0) AS unpaid
        FROM customer_orders
-       WHERE created_at >= NOW() - ($1::int * interval '1 day')`,
-      [range],
+       WHERE created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR store_id=$2)`,
+      [range, storeId ?? null],
     ),
     pool.query(
       `SELECT orders.id,orders.created_at,users.name AS customer,
@@ -168,8 +171,9 @@ async function salesReport(range: OperationalReportRange) {
        FROM customer_orders orders
        INNER JOIN app_users users ON users.id=orders.user_id
        WHERE orders.created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)
        ORDER BY orders.created_at DESC LIMIT 2000`,
-      [range],
+      [range, storeId ?? null],
     ),
   ]);
   const summary = summaryResult.rows[0];
@@ -207,7 +211,7 @@ async function salesReport(range: OperationalReportRange) {
   });
 }
 
-async function paymentReport(range: OperationalReportRange) {
+async function paymentReport(range: OperationalReportRange, storeId?: string | null) {
   await ensureCustomerPortalSchema();
   const [summaryResult, rowsResult] = await Promise.all([
     pool.query(
@@ -215,9 +219,11 @@ async function paymentReport(range: OperationalReportRange) {
         COALESCE(SUM(amount) FILTER (WHERE status='Paid'),0) AS paid,
         COALESCE(SUM(amount) FILTER (WHERE status<>'Paid'),0) AS pending,
         COUNT(*) FILTER (WHERE status='Failed')::int AS failed
-       FROM customer_payments
-       WHERE created_at >= NOW() - ($1::int * interval '1 day')`,
-      [range],
+       FROM customer_payments payments
+       LEFT JOIN customer_orders orders ON orders.id=payments.order_id
+       WHERE payments.created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)`,
+      [range, storeId ?? null],
     ),
     pool.query(
       `SELECT payments.id,payments.created_at,payments.reference,
@@ -225,9 +231,11 @@ async function paymentReport(range: OperationalReportRange) {
         payments.method,payments.status,payments.amount
        FROM customer_payments payments
        INNER JOIN app_users users ON users.id=payments.user_id
+       LEFT JOIN customer_orders orders ON orders.id=payments.order_id
        WHERE payments.created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)
        ORDER BY payments.created_at DESC LIMIT 2000`,
-      [range],
+      [range, storeId ?? null],
     ),
   ]);
   const summary = summaryResult.rows[0];
@@ -267,7 +275,7 @@ async function paymentReport(range: OperationalReportRange) {
   });
 }
 
-async function customerReport(range: OperationalReportRange) {
+async function customerReport(range: OperationalReportRange, storeId?: string | null) {
   await Promise.all([ensureCustomerTable(), ensureCustomerPortalSchema()]);
   const [summaryResult, rowsResult] = await Promise.all([
     pool.query(
@@ -276,8 +284,9 @@ async function customerReport(range: OperationalReportRange) {
         COUNT(*) FILTER (WHERE status='inactive')::int AS inactive,
         COUNT(*) FILTER (WHERE customer_type='business')::int AS business
        FROM customers
-       WHERE created_at >= NOW() - ($1::int * interval '1 day')`,
-      [range],
+       WHERE created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR store_id=$2)`,
+      [range, storeId ?? null],
     ),
     pool.query(
       `SELECT customers.id,customers.created_at,customers.full_name,
@@ -287,11 +296,13 @@ async function customerReport(range: OperationalReportRange) {
         COALESCE(wallet.balance,0) AS wallet_balance
        FROM customers
        LEFT JOIN customer_orders orders ON orders.user_id=customers.user_id
+         AND ($2::uuid IS NULL OR orders.store_id=$2)
        LEFT JOIN customer_wallets wallet ON wallet.user_id=customers.user_id
        WHERE customers.created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR customers.store_id=$2)
        GROUP BY customers.id,wallet.balance
        ORDER BY customers.created_at DESC LIMIT 2000`,
-      [range],
+      [range, storeId ?? null],
     ),
   ]);
   const summary = summaryResult.rows[0];
@@ -331,7 +342,7 @@ async function customerReport(range: OperationalReportRange) {
   });
 }
 
-async function serviceReport(range: OperationalReportRange) {
+async function serviceReport(range: OperationalReportRange, storeId?: string | null) {
   await Promise.all([ensureServiceCatalogSchema(), ensureCustomerPortalSchema()]);
   const rowsResult = await pool.query(
     `SELECT orders.service,COUNT(*)::int AS orders,
@@ -341,9 +352,10 @@ async function serviceReport(range: OperationalReportRange) {
       MAX(orders.created_at) AS last_order
      FROM customer_orders orders
      WHERE orders.created_at >= NOW() - ($1::int * interval '1 day')
+       AND ($2::uuid IS NULL OR orders.store_id=$2)
      GROUP BY orders.service
      ORDER BY revenue DESC,orders DESC`,
-    [range],
+    [range, storeId ?? null],
   );
   const revenue = rowsResult.rows.reduce((sum, row) => sum + Number(row.revenue), 0);
   const orders = rowsResult.rows.reduce((sum, row) => sum + Number(row.orders), 0);
@@ -378,7 +390,7 @@ async function serviceReport(range: OperationalReportRange) {
   });
 }
 
-async function pickupReport(range: OperationalReportRange) {
+async function pickupReport(range: OperationalReportRange, storeId?: string | null) {
   await syncPickupTasks();
   const [summaryResult, rowsResult] = await Promise.all([
     pool.query(
@@ -386,9 +398,11 @@ async function pickupReport(range: OperationalReportRange) {
         COUNT(*) FILTER (WHERE status='Completed')::int AS completed,
         COUNT(*) FILTER (WHERE status NOT IN ('Completed','Failed'))::int AS pending,
         COUNT(*) FILTER (WHERE status='Failed')::int AS failed
-       FROM order_pickups
-       WHERE scheduled_at >= NOW() - ($1::int * interval '1 day')`,
-      [range],
+       FROM order_pickups pickups
+       INNER JOIN customer_orders orders ON orders.id=pickups.order_id
+       WHERE pickups.scheduled_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)`,
+      [range, storeId ?? null],
     ),
     pool.query(
       `SELECT pickups.id,pickups.scheduled_at,pickups.order_id,
@@ -399,8 +413,9 @@ async function pickupReport(range: OperationalReportRange) {
        INNER JOIN app_users users ON users.id=orders.user_id
        LEFT JOIN riders ON riders.id=pickups.rider_id
        WHERE pickups.scheduled_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)
        ORDER BY pickups.scheduled_at DESC LIMIT 2000`,
-      [range],
+      [range, storeId ?? null],
     ),
   ]);
   const summary = summaryResult.rows[0];
@@ -438,7 +453,7 @@ async function pickupReport(range: OperationalReportRange) {
   });
 }
 
-async function deliveryReport(range: OperationalReportRange) {
+async function deliveryReport(range: OperationalReportRange, storeId?: string | null) {
   await syncDeliveryTasks();
   const [summaryResult, rowsResult] = await Promise.all([
     pool.query(
@@ -446,9 +461,11 @@ async function deliveryReport(range: OperationalReportRange) {
         COUNT(*) FILTER (WHERE status='Delivered')::int AS delivered,
         COUNT(*) FILTER (WHERE status NOT IN ('Delivered','Failed'))::int AS pending,
         COUNT(*) FILTER (WHERE status='Failed')::int AS failed
-       FROM order_deliveries
-       WHERE scheduled_at >= NOW() - ($1::int * interval '1 day')`,
-      [range],
+       FROM order_deliveries deliveries
+       INNER JOIN customer_orders orders ON orders.id=deliveries.order_id
+       WHERE deliveries.scheduled_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)`,
+      [range, storeId ?? null],
     ),
     pool.query(
       `SELECT deliveries.id,deliveries.scheduled_at,deliveries.order_id,
@@ -460,8 +477,9 @@ async function deliveryReport(range: OperationalReportRange) {
        INNER JOIN app_users users ON users.id=orders.user_id
        LEFT JOIN riders ON riders.id=deliveries.rider_id
        WHERE deliveries.scheduled_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR orders.store_id=$2)
        ORDER BY deliveries.scheduled_at DESC LIMIT 2000`,
-      [range],
+      [range, storeId ?? null],
     ),
   ]);
   const summary = summaryResult.rows[0];
@@ -501,24 +519,27 @@ async function deliveryReport(range: OperationalReportRange) {
   });
 }
 
-async function riderReport(range: OperationalReportRange) {
+async function riderReport(range: OperationalReportRange, storeId?: string | null) {
   await Promise.all([syncPickupTasks(), syncDeliveryTasks()]);
   const rowsResult = await pool.query(
     `SELECT riders.id,riders.name,riders.mobile,riders.area,riders.status,
-      COUNT(DISTINCT pickups.id) AS pickups,
-      COUNT(DISTINCT pickups.id) FILTER (WHERE pickups.status='Completed') AS pickups_done,
-      COUNT(DISTINCT deliveries.id) AS deliveries,
-      COUNT(DISTINCT deliveries.id) FILTER (WHERE deliveries.status='Delivered') AS deliveries_done,
-      COUNT(DISTINCT pickups.id) FILTER (WHERE pickups.status='Failed') +
-        COUNT(DISTINCT deliveries.id) FILTER (WHERE deliveries.status='Failed') AS failed
+      COUNT(DISTINCT pickups.id) FILTER (WHERE $2::uuid IS NULL OR pickup_orders.store_id=$2) AS pickups,
+      COUNT(DISTINCT pickups.id) FILTER (WHERE pickups.status='Completed' AND ($2::uuid IS NULL OR pickup_orders.store_id=$2)) AS pickups_done,
+      COUNT(DISTINCT deliveries.id) FILTER (WHERE $2::uuid IS NULL OR delivery_orders.store_id=$2) AS deliveries,
+      COUNT(DISTINCT deliveries.id) FILTER (WHERE deliveries.status='Delivered' AND ($2::uuid IS NULL OR delivery_orders.store_id=$2)) AS deliveries_done,
+      COUNT(DISTINCT pickups.id) FILTER (WHERE pickups.status='Failed' AND ($2::uuid IS NULL OR pickup_orders.store_id=$2)) +
+        COUNT(DISTINCT deliveries.id) FILTER (WHERE deliveries.status='Failed' AND ($2::uuid IS NULL OR delivery_orders.store_id=$2)) AS failed
      FROM riders
      LEFT JOIN order_pickups pickups ON pickups.rider_id=riders.id
        AND pickups.scheduled_at >= NOW() - ($1::int * interval '1 day')
+     LEFT JOIN customer_orders pickup_orders ON pickup_orders.id=pickups.order_id
      LEFT JOIN order_deliveries deliveries ON deliveries.rider_id=riders.id
        AND deliveries.scheduled_at >= NOW() - ($1::int * interval '1 day')
+     LEFT JOIN customer_orders delivery_orders ON delivery_orders.id=deliveries.order_id
+     WHERE ($2::uuid IS NULL OR riders.store_id=$2)
      GROUP BY riders.id
      ORDER BY deliveries_done DESC,pickups_done DESC,riders.name`,
-    [range],
+    [range, storeId ?? null],
   );
   const active = rowsResult.rows.filter((row) => row.status !== "Off Duty").length;
   const pickupDone = rowsResult.rows.reduce(
@@ -563,16 +584,18 @@ async function riderReport(range: OperationalReportRange) {
   });
 }
 
-async function inventoryReport(range: OperationalReportRange) {
+async function inventoryReport(range: OperationalReportRange, storeId?: string | null) {
   await ensureInventoryTable();
   const rowsResult = await pool.query(
     `SELECT id,name,category,brand,unit_type,current_stock,minimum_stock,
       reorder_quantity,supplier,purchase_price,
       current_stock * purchase_price AS stock_value,status,updated_at
      FROM inventory_items
+     WHERE ($1::uuid IS NULL OR store_id=$1)
      ORDER BY
        CASE WHEN current_stock <= minimum_stock THEN 0 ELSE 1 END,
-       name`,
+      name`,
+    [storeId ?? null],
   );
   const active = rowsResult.rows.filter((row) => row.status === "active").length;
   const lowStock = rowsResult.rows.filter(
@@ -621,7 +644,7 @@ async function inventoryReport(range: OperationalReportRange) {
   });
 }
 
-async function complaintReport(range: OperationalReportRange) {
+async function complaintReport(range: OperationalReportRange, storeId?: string | null) {
   await ensureCustomerPortalSchema();
   const [summaryResult, rowsResult] = await Promise.all([
     pool.query(
@@ -630,8 +653,9 @@ async function complaintReport(range: OperationalReportRange) {
         COUNT(*) FILTER (WHERE status='In Progress')::int AS progress,
         COUNT(*) FILTER (WHERE status='Resolved')::int AS resolved
        FROM customer_complaints
-       WHERE created_at >= NOW() - ($1::int * interval '1 day')`,
-      [range],
+       WHERE created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR store_id=$2)`,
+      [range, storeId ?? null],
     ),
     pool.query(
       `SELECT complaints.id,complaints.created_at,users.name AS customer,
@@ -643,8 +667,9 @@ async function complaintReport(range: OperationalReportRange) {
        FROM customer_complaints complaints
        INNER JOIN app_users users ON users.id=complaints.user_id
        WHERE complaints.created_at >= NOW() - ($1::int * interval '1 day')
+         AND ($2::uuid IS NULL OR complaints.store_id=$2)
        ORDER BY complaints.created_at DESC LIMIT 2000`,
-      [range],
+      [range, storeId ?? null],
     ),
   ]);
   const summary = summaryResult.rows[0];
@@ -687,17 +712,18 @@ async function complaintReport(range: OperationalReportRange) {
 export async function getOperationalReport(
   key: OperationalReportKey,
   range: OperationalReportRange,
+  storeId?: string | null,
 ) {
   switch (key) {
-    case "orders": return orderReport(range);
-    case "sales": return salesReport(range);
-    case "payments": return paymentReport(range);
-    case "customers": return customerReport(range);
-    case "services": return serviceReport(range);
-    case "pickups": return pickupReport(range);
-    case "deliveries": return deliveryReport(range);
-    case "riders": return riderReport(range);
-    case "inventory": return inventoryReport(range);
-    case "complaints": return complaintReport(range);
+    case "orders": return orderReport(range, storeId);
+    case "sales": return salesReport(range, storeId);
+    case "payments": return paymentReport(range, storeId);
+    case "customers": return customerReport(range, storeId);
+    case "services": return serviceReport(range, storeId);
+    case "pickups": return pickupReport(range, storeId);
+    case "deliveries": return deliveryReport(range, storeId);
+    case "riders": return riderReport(range, storeId);
+    case "inventory": return inventoryReport(range, storeId);
+    case "complaints": return complaintReport(range, storeId);
   }
 }

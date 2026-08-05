@@ -10,7 +10,8 @@ export type AuthUser = {
   mobile: string;
   name: string;
   designation: string;
-  role: "admin" | "staff" | "customer";
+  role: "admin" | "staff" | "store_manager" | "customer";
+  storeId?: string | null;
 };
 
 function getJwtSecret() {
@@ -30,6 +31,7 @@ export async function signAuthToken(user: AuthUser) {
     name: user.name,
     designation: user.designation,
     role: user.role,
+    ...(user.storeId ? { storeId: user.storeId } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -48,7 +50,8 @@ export async function verifyAuthToken(token: string): Promise<AuthUser | null> {
       typeof payload.mobile !== "string" ||
       typeof payload.name !== "string" ||
       typeof payload.designation !== "string" ||
-      (payload.role !== "admin" && payload.role !== "staff" && payload.role !== "customer")
+      (payload.role !== "admin" && payload.role !== "staff" &&
+        payload.role !== "store_manager" && payload.role !== "customer")
     ) {
       return null;
     }
@@ -60,6 +63,7 @@ export async function verifyAuthToken(token: string): Promise<AuthUser | null> {
       name: payload.name,
       designation: payload.designation,
       role: payload.role,
+      storeId: typeof payload.storeId === "string" ? payload.storeId : null,
     };
   } catch {
     return null;

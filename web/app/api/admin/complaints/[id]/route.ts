@@ -51,6 +51,7 @@ export async function PATCH(
       id,
       status as ComplaintStatus,
       response,
+      user.role === "store_manager" ? user.storeId : null,
     );
     if (!complaint) {
       return NextResponse.json(

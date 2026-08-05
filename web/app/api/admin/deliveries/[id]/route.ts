@@ -58,7 +58,7 @@ export async function PATCH(
       ...(status ? { status } : {}),
       ...(scheduledAt ? { scheduledAt } : {}),
       ...(notes !== undefined ? { notes } : {}),
-    });
+    }, user.role === "store_manager" ? user.storeId : null);
     if (result.kind === "not_found") {
       return NextResponse.json(
         { message: "Delivery not found." },

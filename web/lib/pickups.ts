@@ -49,6 +49,7 @@ export function ensurePickupSchema() {
         pool.query(`
           CREATE TABLE IF NOT EXISTS riders (
             id BIGSERIAL PRIMARY KEY,
+            store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
             name VARCHAR(100) NOT NULL,
             mobile VARCHAR(10) NOT NULL UNIQUE,
             area VARCHAR(100) NOT NULL DEFAULT '',
@@ -78,6 +79,21 @@ export function ensurePickupSchema() {
           );
           CREATE INDEX IF NOT EXISTS order_pickups_schedule_idx
           ON order_pickups(scheduled_at,status);
+          ALTER TABLE riders ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL;
+          CREATE INDEX IF NOT EXISTS riders_store_id_idx ON riders(store_id);
+          UPDATE riders
+          SET store_id = source.store_id
+          FROM (
+            SELECT DISTINCT ON (rider_id) rider_id, store_id
+            FROM (
+              SELECT pickups.rider_id, orders.store_id, pickups.scheduled_at
+              FROM order_pickups pickups
+              INNER JOIN customer_orders orders ON orders.id=pickups.order_id
+              WHERE pickups.rider_id IS NOT NULL AND orders.store_id IS NOT NULL
+            ) assignments
+            ORDER BY rider_id, scheduled_at DESC
+          ) source
+          WHERE riders.id=source.rider_id AND riders.store_id IS NULL;
         `),
       )
       .then(() => undefined)
@@ -109,11 +125,14 @@ function statusFromValue(value: unknown): PickupStatus {
     : "Scheduled";
 }
 
-export async function listPickupRiders() {
+export async function listPickupRiders(storeId?: string | null) {
   await ensurePickupSchema();
   const { rows } = await pool.query(
     `SELECT id,name,mobile,area,status FROM riders
-     WHERE status <> 'Off Duty' ORDER BY name`,
+     WHERE status <> 'Off Duty'
+       AND ($1::uuid IS NULL OR store_id=$1)
+     ORDER BY name`,
+    [storeId ?? null],
   );
   return rows.map(
     (row): PickupRider => ({
@@ -126,7 +145,7 @@ export async function listPickupRiders() {
   );
 }
 
-export async function listPickupTasks() {
+export async function listPickupTasks(storeId?: string | null) {
   await syncPickupTasks();
   const { rows } = await pool.query(
     `SELECT pickups.id,pickups.order_id,pickups.scheduled_at,pickups.status,
@@ -137,9 +156,11 @@ export async function listPickupTasks() {
      INNER JOIN customer_orders orders ON orders.id=pickups.order_id
      INNER JOIN app_users users ON users.id=orders.user_id
      LEFT JOIN riders ON riders.id=pickups.rider_id
+     WHERE ($1::uuid IS NULL OR orders.store_id=$1)
      ORDER BY
        CASE WHEN pickups.status='Completed' THEN 1 ELSE 0 END,
-       pickups.scheduled_at`,
+    pickups.scheduled_at`,
+    [storeId ?? null],
   );
   return rows.map(
     (row): PickupTask => ({
@@ -158,21 +179,23 @@ export async function listPickupTasks() {
   );
 }
 
-export async function getPickupStats(): Promise<PickupStats> {
+export async function getPickupStats(storeId?: string | null): Promise<PickupStats> {
   await syncPickupTasks();
   const { rows } = await pool.query(`
     SELECT
       COUNT(*) FILTER (
-        WHERE scheduled_at >= date_trunc('day',NOW())
-          AND scheduled_at < date_trunc('day',NOW()) + interval '1 day'
+        WHERE pickups.scheduled_at >= date_trunc('day',NOW())
+          AND pickups.scheduled_at < date_trunc('day',NOW()) + interval '1 day'
       )::int AS today,
-      COUNT(*) FILTER (WHERE status='Completed')::int AS completed,
-      COUNT(*) FILTER (WHERE status NOT IN ('Completed','Failed'))::int AS pending,
+      COUNT(*) FILTER (WHERE pickups.status='Completed')::int AS completed,
+      COUNT(*) FILTER (WHERE pickups.status NOT IN ('Completed','Failed'))::int AS pending,
       COUNT(*) FILTER (
-        WHERE rider_id IS NULL AND status NOT IN ('Completed','Failed')
+        WHERE pickups.rider_id IS NULL AND pickups.status NOT IN ('Completed','Failed')
       )::int AS unassigned
-    FROM order_pickups
-  `);
+    FROM order_pickups pickups
+    INNER JOIN customer_orders orders ON orders.id=pickups.order_id
+    WHERE ($1::uuid IS NULL OR orders.store_id=$1)
+  `, [storeId ?? null]);
   return {
     today: Number(rows[0].today),
     completed: Number(rows[0].completed),
@@ -197,6 +220,7 @@ export async function updatePickupTask(
     scheduledAt?: string;
     notes?: string;
   },
+  storeId?: string | null,
 ) {
   await syncPickupTasks();
   const client = await pool.connect();
@@ -206,8 +230,8 @@ export async function updatePickupTask(
       `SELECT pickups.*,orders.user_id,orders.status AS order_status
        FROM order_pickups pickups
        INNER JOIN customer_orders orders ON orders.id=pickups.order_id
-       WHERE pickups.id=$1 FOR UPDATE`,
-      [id],
+       WHERE pickups.id=$1 AND ($2::uuid IS NULL OR orders.store_id=$2) FOR UPDATE`,
+      [id, storeId ?? null],
     );
     if (!currentResult.rows[0]) {
       await client.query("ROLLBACK");
@@ -289,7 +313,7 @@ export async function updatePickupTask(
     }
 
     await client.query("COMMIT");
-    const tasks = await listPickupTasks();
+    const tasks = await listPickupTasks(storeId);
     return {
       kind: "updated" as const,
       pickup: tasks.find((task) => task.id === id) ?? null,

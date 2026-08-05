@@ -43,6 +43,7 @@ export type InventoryPayload = Omit<
 
 type InventoryRow = {
   id: string;
+  store_id: string | null;
   name: string;
   category: InventoryCategory;
   brand: string;
@@ -73,7 +74,7 @@ type InventoryRow = {
 };
 
 const inventoryColumns = `
-  id, name, category, brand, description, unit_type, pack_size, opening_stock,
+  id, store_id, name, category, brand, description, unit_type, pack_size, opening_stock,
   current_stock, minimum_stock, maximum_stock, reorder_quantity, supplier,
   purchase_price, selling_price, tax_percent, last_purchase_date, warehouse,
   rack_number, shelf, bin, has_expiry, manufacturing_date, expiry_date,
@@ -87,6 +88,7 @@ export function ensureInventoryTable() {
     setupPromise = pool.query(`
       CREATE TABLE IF NOT EXISTS inventory_items (
         id BIGSERIAL PRIMARY KEY,
+        store_id UUID REFERENCES stores(id) ON DELETE CASCADE,
         name VARCHAR(150) NOT NULL,
         category VARCHAR(50) NOT NULL,
         brand VARCHAR(100) NOT NULL DEFAULT '',
@@ -125,7 +127,9 @@ export function ensureInventoryTable() {
         ),
         CONSTRAINT inventory_tax_range CHECK (tax_percent IS NULL OR (tax_percent >= 0 AND tax_percent <= 100)),
         CONSTRAINT inventory_status_values CHECK (status IN ('active', 'inactive'))
-      )
+      );
+      ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE CASCADE;
+      CREATE INDEX IF NOT EXISTS inventory_items_store_id_idx ON inventory_items(store_id)
     `).then(() => undefined).catch((error) => {
       setupPromise = null;
       throw error;
@@ -281,39 +285,43 @@ function mapInventoryItem(row: InventoryRow): InventoryItem {
   };
 }
 
-export async function listInventoryItems() {
+export async function listInventoryItems(storeId?: string | null) {
   await ensureInventoryTable();
   const { rows } = await pool.query<InventoryRow>(
-    `SELECT ${inventoryColumns} FROM inventory_items ORDER BY created_at DESC`,
+    `SELECT ${inventoryColumns} FROM inventory_items
+     WHERE ($1::uuid IS NULL OR store_id=$1)
+     ORDER BY created_at DESC`,
+    [storeId ?? null],
   );
   return rows.map(mapInventoryItem);
 }
 
-export async function getInventoryItemById(id: string) {
+export async function getInventoryItemById(id: string, storeId?: string | null) {
   await ensureInventoryTable();
   const { rows } = await pool.query<InventoryRow>(
-    `SELECT ${inventoryColumns} FROM inventory_items WHERE id = $1 LIMIT 1`,
-    [id],
+    `SELECT ${inventoryColumns} FROM inventory_items
+     WHERE id = $1 AND ($2::uuid IS NULL OR store_id=$2) LIMIT 1`,
+    [id, storeId ?? null],
   );
   return rows[0] ? mapInventoryItem(rows[0]) : null;
 }
 
-export async function createInventoryItem(payload: InventoryPayload) {
+export async function createInventoryItem(payload: InventoryPayload, storeId?: string | null) {
   await ensureInventoryTable();
   const { rows } = await pool.query<InventoryRow>(
     `INSERT INTO inventory_items (
-      name, category, brand, description, unit_type, pack_size, opening_stock,
+      store_id, name, category, brand, description, unit_type, pack_size, opening_stock,
       current_stock, minimum_stock, maximum_stock, reorder_quantity, supplier,
       purchase_price, selling_price, tax_percent, last_purchase_date, warehouse,
       rack_number, shelf, bin, has_expiry, manufacturing_date, expiry_date,
       batch_number, status, internal_notes
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13, $14,
-      NULLIF($15, '')::date, $16, $17, $18, $19, $20,
-      NULLIF($21, '')::date, NULLIF($22, '')::date, $23, $24, $25
+      $1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15,
+      NULLIF($16, '')::date, $17, $18, $19, $20, $21,
+      NULLIF($22, '')::date, NULLIF($23, '')::date, $24, $25, $26
     ) RETURNING ${inventoryColumns}`,
     [
-      payload.name, payload.category, payload.brand, payload.description,
+      storeId ?? null, payload.name, payload.category, payload.brand, payload.description,
       payload.unitType, payload.packSize, payload.openingStock,
       payload.minimumStock, payload.maximumStock, payload.reorderQuantity,
       payload.supplier, payload.purchasePrice, payload.sellingPrice,
@@ -328,7 +336,11 @@ export async function createInventoryItem(payload: InventoryPayload) {
   return mapInventoryItem(rows[0]);
 }
 
-export async function updateInventoryItem(id: string, payload: InventoryPayload) {
+export async function updateInventoryItem(
+  id: string,
+  payload: InventoryPayload,
+  storeId?: string | null,
+) {
   await ensureInventoryTable();
   const { rows } = await pool.query<InventoryRow>(
     `UPDATE inventory_items SET
@@ -341,7 +353,8 @@ export async function updateInventoryItem(id: string, payload: InventoryPayload)
       has_expiry = $21, manufacturing_date = NULLIF($22, '')::date,
       expiry_date = NULLIF($23, '')::date, batch_number = $24,
       status = $25, internal_notes = $26, updated_at = NOW()
-     WHERE id = $1 RETURNING ${inventoryColumns}`,
+     WHERE id = $1 AND ($27::uuid IS NULL OR store_id=$27)
+     RETURNING ${inventoryColumns}`,
     [
       id, payload.name, payload.category, payload.brand, payload.description,
       payload.unitType, payload.packSize, payload.openingStock,
@@ -353,23 +366,32 @@ export async function updateInventoryItem(id: string, payload: InventoryPayload)
       payload.hasExpiry ? payload.expiryDate : "",
       payload.hasExpiry ? payload.batchNumber : "",
       payload.status, payload.internalNotes,
+      storeId ?? null,
     ],
   );
   return rows[0] ? mapInventoryItem(rows[0]) : null;
 }
 
-export async function updateInventoryItemStatus(id: string, status: InventoryStatus) {
+export async function updateInventoryItemStatus(
+  id: string,
+  status: InventoryStatus,
+  storeId?: string | null,
+) {
   await ensureInventoryTable();
   const { rows } = await pool.query<InventoryRow>(
     `UPDATE inventory_items SET status = $2, updated_at = NOW()
-     WHERE id = $1 RETURNING ${inventoryColumns}`,
-    [id, status],
+     WHERE id = $1 AND ($3::uuid IS NULL OR store_id=$3)
+     RETURNING ${inventoryColumns}`,
+    [id, status, storeId ?? null],
   );
   return rows[0] ? mapInventoryItem(rows[0]) : null;
 }
 
-export async function deleteInventoryItem(id: string) {
+export async function deleteInventoryItem(id: string, storeId?: string | null) {
   await ensureInventoryTable();
-  const result = await pool.query("DELETE FROM inventory_items WHERE id = $1", [id]);
+  const result = await pool.query(
+    "DELETE FROM inventory_items WHERE id = $1 AND ($2::uuid IS NULL OR store_id=$2)",
+    [id, storeId ?? null],
+  );
   return (result.rowCount ?? 0) > 0;
 }

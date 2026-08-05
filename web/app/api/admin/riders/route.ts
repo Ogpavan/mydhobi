@@ -24,7 +24,7 @@ export async function GET() {
   if (!user || user.role === "customer") {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
-  return NextResponse.json({ riders: await listRiders() });
+  return NextResponse.json({ riders: await listRiders(user.role === "store_manager" ? user.storeId : null) });
 }
 
 export async function POST(request: Request) {
@@ -58,7 +58,13 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const rider = await createRider({ name, mobile, area, status });
+    const rider = await createRider({
+      name,
+      mobile,
+      area,
+      status,
+      storeId: user.role === "store_manager" ? user.storeId : null,
+    });
     return NextResponse.json({ rider }, { status: 201 });
   } catch (error) {
     if (isUniqueViolation(error)) {

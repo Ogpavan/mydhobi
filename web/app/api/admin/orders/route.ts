@@ -12,8 +12,8 @@ export async function GET() {
   }
 
   const [orders, stats] = await Promise.all([
-    listAdminOrders(),
-    getAdminOrderStats(),
+    listAdminOrders(user.role === "store_manager" ? user.storeId : null),
+    getAdminOrderStats(user.role === "store_manager" ? user.storeId : null),
   ]);
   return NextResponse.json({ orders, stats });
 }

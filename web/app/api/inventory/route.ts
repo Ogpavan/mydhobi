@@ -12,11 +12,12 @@ import { getCurrentUser } from "@/lib/session";
 export const runtime = "nodejs";
 
 export async function GET() {
-  if (!(await getCurrentUser())) {
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer") {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   try {
-    return NextResponse.json({ items: await listInventoryItems() });
+    return NextResponse.json({ items: await listInventoryItems(user.role === "store_manager" ? user.storeId : null) });
   } catch (error) {
     console.error("List inventory failed", error);
     return NextResponse.json(
@@ -27,7 +28,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!(await getCurrentUser())) {
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer" || (user.role === "store_manager" && !user.storeId)) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   try {
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json(
-      { item: await createInventoryItem(payload) },
+      { item: await createInventoryItem(payload, user.role === "store_manager" ? user.storeId : null) },
       { status: 201 },
     );
   } catch (error) {

@@ -97,11 +97,25 @@ const navItems: NavItem[] = [
   },
 ];
 
+const storeManagerReportPaths = new Set([
+  "/admin/reports/orders",
+  "/admin/reports/sales",
+  "/admin/reports/payments",
+  "/admin/reports/customers",
+  "/admin/reports/services",
+  "/admin/reports/pickups",
+  "/admin/reports/deliveries",
+  "/admin/reports/riders",
+  "/admin/reports/inventory",
+  "/admin/reports/complaints",
+]);
+
 type AdminSidebarProps = {
   className?: string;
   onNavigate?: () => void;
   collapsible?: boolean;
   showRolePermissions?: boolean;
+  storeManager?: boolean;
   sidebarItems?: SidebarSetting[];
 };
 
@@ -110,6 +124,7 @@ export function AdminSidebar({
   onNavigate,
   collapsible = true,
   showRolePermissions = false,
+  storeManager = false,
   sidebarItems = SIDEBAR_ITEM_DEFINITIONS.map((item) => ({
     key: item.key,
     label: item.defaultLabel,
@@ -125,6 +140,12 @@ export function AdminSidebar({
       .map((item) => item.href),
   );
   const isCollapsed = collapsible && !open;
+  const visibleNavItems = storeManager
+    ? navItems.filter((item) => [
+      "dashboard", "orders", "customers", "pickups", "deliveries", "inventory",
+      "riders", "payments", "complaints", "reports", "settings",
+    ].includes(item.key))
+    : navItems;
 
   useEffect(() => {
     const activeGroup = navItems.find(
@@ -185,7 +206,7 @@ export function AdminSidebar({
       <SidebarContent className="mt-[16px]">
         <nav aria-label="Admin navigation">
           <SidebarMenu className="gap-[2px]">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
           const setting = settings.find((entry) => entry.key === item.key);
           const title = setting?.label ?? item.title;
           const isActive =
@@ -217,7 +238,8 @@ export function AdminSidebar({
           if (item.children) {
             const isExpanded = openGroups.includes(item.href) && !isCollapsed;
             const visibleChildren = item.children.filter(
-              (child) => !child.adminOnly || showRolePermissions,
+              (child) => (!child.adminOnly || showRolePermissions || storeManagerReportPaths.has(child.href)) &&
+                (!storeManager || child.href === "/admin/settings/profile" || storeManagerReportPaths.has(child.href)),
             );
 
             return (

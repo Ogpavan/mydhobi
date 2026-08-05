@@ -47,17 +47,29 @@ export async function GET(request: Request) {
   if (!user || user.role === "customer") {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+  if (user.role === "store_manager" && !user.storeId) {
+    return NextResponse.json({ message: "Store manager is not assigned to a store." }, { status: 403 });
+  }
+  const storeId = user.role === "store_manager" ? user.storeId : null;
 
   const url = new URL(request.url);
   const key = url.searchParams.get("key") ?? "";
   const id = url.searchParams.get("id") ?? "";
+  if (user.role === "store_manager" &&
+      ![
+        "dashboard", "orders", "order-detail", "customers", "pickups", "deliveries",
+        "inventory", "riders", "rider-detail", "payments", "complaints", "reports",
+        "operational-report", "profile",
+      ].includes(key)) {
+    return NextResponse.json({ message: "This page is not available to a store manager." }, { status: 403 });
+  }
 
   switch (key) {
     case "dashboard":
-      return response(await getDashboardData());
+      return response(await getDashboardData(storeId));
     case "customers":
       return response({
-        customers: await listCustomers(),
+        customers: await listCustomers(storeId),
         canManageWallet: user.role === "admin",
       });
     case "stores":
@@ -100,13 +112,13 @@ export async function GET(request: Request) {
     }
     case "orders": {
       const [orders, stats] = await Promise.all([
-        listAdminOrders(),
-        getAdminOrderStats(),
+        listAdminOrders(storeId),
+        getAdminOrderStats(storeId),
       ]);
       return response({ orders, stats });
     }
     case "order-detail": {
-      const order = await getAdminOrder(id);
+      const order = await getAdminOrder(id, storeId);
       if (!order) {
         return NextResponse.json({ message: "Order not found." }, { status: 404 });
       }
@@ -114,17 +126,17 @@ export async function GET(request: Request) {
     }
     case "pickups": {
       const [pickups, riders, stats] = await Promise.all([
-        listPickupTasks(),
-        listPickupRiders(),
-        getPickupStats(),
+        listPickupTasks(storeId),
+        listPickupRiders(storeId),
+        getPickupStats(storeId),
       ]);
       return response({ pickups, riders, stats });
     }
     case "deliveries": {
       const [deliveries, riders, stats] = await Promise.all([
-        listDeliveryTasks(),
-        listDeliveryRiders(),
-        getDeliveryStats(),
+        listDeliveryTasks(storeId),
+        listDeliveryRiders(storeId),
+        getDeliveryStats(storeId),
       ]);
       return response({ deliveries, riders, stats });
     }
@@ -141,7 +153,7 @@ export async function GET(request: Request) {
       return response({ services: await listCatalogServices(true) });
     case "inventory": {
       const [items, categories, units] = await Promise.all([
-        listInventoryItems(),
+        listInventoryItems(storeId),
         listSetupInventoryCategories(),
         listSetupInventoryUnits(),
       ]);
@@ -157,9 +169,9 @@ export async function GET(request: Request) {
       });
     }
     case "riders":
-      return response({ riders: await listRiders() });
+      return response({ riders: await listRiders(storeId) });
     case "rider-detail": {
-      const rider = await getRider(id);
+      const rider = await getRider(id, storeId);
       if (!rider) {
         return NextResponse.json({ message: "Rider not found." }, { status: 404 });
       }
@@ -167,8 +179,8 @@ export async function GET(request: Request) {
     }
     case "payments": {
       const [payments, stats] = await Promise.all([
-        listPayments(),
-        getPaymentStats(),
+        listPayments(storeId),
+        getPaymentStats(storeId),
       ]);
       return response({ payments, stats });
     }
@@ -178,19 +190,19 @@ export async function GET(request: Request) {
       return response({ referrals: await listReferrals() });
     case "complaints": {
       const [complaints, stats] = await Promise.all([
-        listComplaints(),
-        getComplaintStats(),
+        listComplaints(storeId),
+        getComplaintStats(storeId),
       ]);
       return response({ complaints, stats });
     }
     case "reports":
-      return response({ report: await getReportData(30) });
+      return response({ report: await getReportData(30, storeId) });
     case "operational-report": {
       const report = url.searchParams.get("report") ?? "";
       if (!isOperationalReportKey(report)) {
         return NextResponse.json({ message: "Report not found." }, { status: 404 });
       }
-      return response({ report: await getOperationalReport(report, 30) });
+      return response({ report: await getOperationalReport(report, 30, storeId) });
     }
     case "wallet-report":
       if (user.role !== "admin") {

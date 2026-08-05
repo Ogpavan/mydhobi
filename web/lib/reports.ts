@@ -30,7 +30,10 @@ function dateKey(value: unknown) {
   return String(value).slice(0, 10);
 }
 
-export async function getReportData(range: ReportRange): Promise<ReportData> {
+export async function getReportData(
+  range: ReportRange,
+  storeId?: string | null,
+): Promise<ReportData> {
   await ensurePaymentLedger();
   const [summaryResult, dailyResult, serviceResult, statusResult, methodResult] =
     await Promise.all([
@@ -42,11 +45,14 @@ export async function getReportData(range: ReportRange): Promise<ReportData> {
           (
             SELECT COUNT(DISTINCT users.id)::int
             FROM app_users users
+            INNER JOIN customer_orders customer_scope ON customer_scope.user_id=users.id
             WHERE users.role='customer'
+              AND ($2::uuid IS NULL OR customer_scope.store_id=$2)
           ) AS customers
          FROM customer_orders
-         WHERE created_at >= NOW() - ($1::int * interval '1 day')`,
-        [range],
+         WHERE created_at >= NOW() - ($1::int * interval '1 day')
+           AND ($2::uuid IS NULL OR store_id=$2)`,
+        [range, storeId ?? null],
       ),
       pool.query(
         `SELECT
@@ -55,37 +61,42 @@ export async function getReportData(range: ReportRange): Promise<ReportData> {
           COALESCE(SUM(amount) FILTER (WHERE payment_status='Paid'),0) AS revenue
          FROM customer_orders
          WHERE created_at >= NOW() - ($1::int * interval '1 day')
+           AND ($2::uuid IS NULL OR store_id=$2)
          GROUP BY report_date
          ORDER BY report_date`,
-        [range],
+        [range, storeId ?? null],
       ),
       pool.query(
         `SELECT service,COUNT(*)::int AS orders,
           COALESCE(SUM(amount) FILTER (WHERE payment_status='Paid'),0) AS revenue
          FROM customer_orders
          WHERE created_at >= NOW() - ($1::int * interval '1 day')
+           AND ($2::uuid IS NULL OR store_id=$2)
          GROUP BY service
          ORDER BY orders DESC,revenue DESC
          LIMIT 10`,
-        [range],
+        [range, storeId ?? null],
       ),
       pool.query(
         `SELECT status,COUNT(*)::int AS orders
          FROM customer_orders
          WHERE created_at >= NOW() - ($1::int * interval '1 day')
+           AND ($2::uuid IS NULL OR store_id=$2)
          GROUP BY status
          ORDER BY orders DESC,status`,
-        [range],
+        [range, storeId ?? null],
       ),
       pool.query(
-        `SELECT method,COUNT(*)::int AS transactions,
-          COALESCE(SUM(amount),0) AS amount
+        `SELECT customer_payments.method,COUNT(*)::int AS transactions,
+          COALESCE(SUM(customer_payments.amount),0) AS amount
          FROM customer_payments
-         WHERE created_at >= NOW() - ($1::int * interval '1 day')
-           AND status='Paid'
-         GROUP BY method
+         LEFT JOIN customer_orders orders ON orders.id=customer_payments.order_id
+         WHERE customer_payments.created_at >= NOW() - ($1::int * interval '1 day')
+           AND customer_payments.status='Paid'
+           AND ($2::uuid IS NULL OR orders.store_id=$2)
+         GROUP BY customer_payments.method
          ORDER BY amount DESC`,
-        [range],
+        [range, storeId ?? null],
       ),
     ]);
 
@@ -125,7 +136,7 @@ function csvCell(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-export async function createOrdersCsv(range: ReportRange) {
+export async function createOrdersCsv(range: ReportRange, storeId?: string | null) {
   await ensurePaymentLedger();
   const { rows } = await pool.query(
     `SELECT orders.id,users.name AS customer,users.mobile,orders.service,
@@ -135,8 +146,9 @@ export async function createOrdersCsv(range: ReportRange) {
      FROM customer_orders orders
      INNER JOIN app_users users ON users.id=orders.user_id
      WHERE orders.created_at >= NOW() - ($1::int * interval '1 day')
+       AND ($2::uuid IS NULL OR orders.store_id=$2)
      ORDER BY orders.created_at DESC`,
-    [range],
+    [range, storeId ?? null],
   );
   const headers = [
     "Order ID",

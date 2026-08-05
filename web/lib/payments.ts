@@ -69,7 +69,7 @@ function statusFromValue(value: unknown): PaymentStatus {
     : "Pending";
 }
 
-export async function listPayments() {
+export async function listPayments(storeId?: string | null) {
   await ensurePaymentLedger();
   const { rows } = await pool.query(`
     SELECT payments.id,payments.reference,payments.order_id,payments.kind,
@@ -77,9 +77,11 @@ export async function listPayments() {
       users.name AS customer_name,users.mobile AS customer_mobile
     FROM customer_payments payments
     INNER JOIN app_users users ON users.id=payments.user_id
+    LEFT JOIN customer_orders orders ON orders.id=payments.order_id
+    WHERE ($1::uuid IS NULL OR orders.store_id=$1)
     ORDER BY payments.created_at DESC
     LIMIT 500
-  `);
+  `, [storeId ?? null]);
   return rows.map(
     (row): PaymentRecord => ({
       id: String(row.id),
@@ -96,19 +98,21 @@ export async function listPayments() {
   );
 }
 
-export async function getPaymentStats(): Promise<PaymentStats> {
+export async function getPaymentStats(storeId?: string | null): Promise<PaymentStats> {
   await ensurePaymentLedger();
   const { rows } = await pool.query(`
     SELECT
-      COALESCE(SUM(amount) FILTER (
-        WHERE status='Paid'
-          AND (kind='Wallet Top-up' OR (kind='Order' AND method <> 'wallet'))
+      COALESCE(SUM(payments.amount) FILTER (
+        WHERE payments.status='Paid'
+          AND (payments.kind='Wallet Top-up' OR (payments.kind='Order' AND payments.method <> 'wallet'))
       ),0) AS collected,
-      COALESCE(SUM(amount) FILTER (WHERE status='Pending'),0) AS pending,
-      COALESCE(SUM(amount) FILTER (WHERE status='Refunded'),0) AS refunded,
+      COALESCE(SUM(payments.amount) FILTER (WHERE payments.status='Pending'),0) AS pending,
+      COALESCE(SUM(payments.amount) FILTER (WHERE payments.status='Refunded'),0) AS refunded,
       COUNT(*)::int AS transactions
-    FROM customer_payments
-  `);
+    FROM customer_payments payments
+    LEFT JOIN customer_orders orders ON orders.id=payments.order_id
+    WHERE ($1::uuid IS NULL OR orders.store_id=$1)
+  `, [storeId ?? null]);
   return {
     collected: Number(rows[0].collected),
     pending: Number(rows[0].pending),
@@ -120,14 +124,17 @@ export async function getPaymentStats(): Promise<PaymentStats> {
 export async function updatePaymentStatus(
   id: string,
   nextStatus: PaymentStatus,
+  storeId?: string | null,
 ) {
   await ensurePaymentLedger();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const currentResult = await client.query(
-      "SELECT * FROM customer_payments WHERE id=$1 FOR UPDATE",
-      [id],
+      `SELECT payments.* FROM customer_payments payments
+       LEFT JOIN customer_orders orders ON orders.id=payments.order_id
+       WHERE payments.id=$1 AND ($2::uuid IS NULL OR orders.store_id=$2) FOR UPDATE`,
+      [id, storeId ?? null],
     );
     if (!currentResult.rows[0]) {
       await client.query("ROLLBACK");
@@ -188,7 +195,7 @@ export async function updatePaymentStatus(
       ],
     );
     await client.query("COMMIT");
-    const payments = await listPayments();
+    const payments = await listPayments(storeId);
     return {
       kind: "updated" as const,
       payment: payments.find((payment) => payment.id === id) ?? null,

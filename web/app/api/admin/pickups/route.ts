@@ -15,9 +15,9 @@ export async function GET() {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
   const [pickups, riders, stats] = await Promise.all([
-    listPickupTasks(),
-    listPickupRiders(),
-    getPickupStats(),
+    listPickupTasks(user.role === "store_manager" ? user.storeId : null),
+    listPickupRiders(user.role === "store_manager" ? user.storeId : null),
+    getPickupStats(user.role === "store_manager" ? user.storeId : null),
   ]);
   return NextResponse.json({ pickups, riders, stats });
 }

@@ -166,6 +166,7 @@ export function AdminHeader({
               className="flex w-full border-r-0"
               onNavigate={() => setOpen(false)}
               showRolePermissions={user.role === "admin"}
+              storeManager={user.role === "store_manager"}
               sidebarItems={sidebarItems}
             />
           </SheetContent>
@@ -179,7 +180,7 @@ export function AdminHeader({
           </h1>
         </div>
 
-        <form onSubmit={event=>{event.preventDefault();const query=searchQuery.trim();if(!query)return;startNavigationProgress();router.push(`/admin/search?q=${encodeURIComponent(query)}`)}} className="relative hidden h-[36px] w-full max-w-[320px] md:block">
+        {user.role !== "store_manager" ? <form onSubmit={event=>{event.preventDefault();const query=searchQuery.trim();if(!query)return;startNavigationProgress();router.push(`/admin/search?q=${encodeURIComponent(query)}`)}} className="relative hidden h-[36px] w-full max-w-[320px] md:block">
           <Search className="pointer-events-none absolute left-[14px] top-1/2 h-4 w-4 -translate-y-1/2 text-[#385071]" />
           <Input
             value={searchQuery}
@@ -188,7 +189,7 @@ export function AdminHeader({
             placeholder="Search orders, stores, customers..."
             type="search"
           />
-        </form>
+        </form> : null}
 
         <DropdownMenu onOpenChange={loadAlerts}>
           <DropdownMenuTrigger asChild>
@@ -251,9 +252,11 @@ export function AdminHeader({
             <DropdownMenuItem asChild>
               <Link href="/admin/settings/profile">Profile</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/admin/settings/basic-setup">Basic Setup</Link>
-            </DropdownMenuItem>
+            {user.role !== "store_manager" ? (
+              <DropdownMenuItem asChild>
+                <Link href="/admin/settings/basic-setup">Basic Setup</Link>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
           </DropdownMenuContent>
@@ -261,7 +264,7 @@ export function AdminHeader({
       </div>
 
       <div className="border-t border-[#DCE6F2] px-4 pb-3 pt-2 md:hidden">
-        <form onSubmit={event=>{event.preventDefault();const query=searchQuery.trim();if(!query)return;startNavigationProgress();router.push(`/admin/search?q=${encodeURIComponent(query)}`)}} className="relative">
+        {user.role !== "store_manager" ? <form onSubmit={event=>{event.preventDefault();const query=searchQuery.trim();if(!query)return;startNavigationProgress();router.push(`/admin/search?q=${encodeURIComponent(query)}`)}} className="relative">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#385071]" />
           <Input
             value={searchQuery}
@@ -270,7 +273,7 @@ export function AdminHeader({
             placeholder="Search orders, stores, customers..."
             type="search"
           />
-        </form>
+        </form> : null}
       </div>
     </header>
   );

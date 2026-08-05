@@ -7,6 +7,7 @@ import {
   signAuthToken,
 } from "@/lib/auth";
 import { getUserByMobile } from "@/lib/users";
+import { getStoreMembershipByUserId } from "@/lib/store-team";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,17 @@ export async function POST(request: Request) {
       );
     }
 
+    const membership = user.role === "store_manager"
+      ? await getStoreMembershipByUserId(user.id)
+      : null;
+    if (user.role === "store_manager" &&
+        (!membership || membership.status !== "active" || membership.role !== "manager")) {
+      return NextResponse.json(
+        { message: "This store manager account is not active." },
+        { status: 403 },
+      );
+    }
+
     const passwordMatches = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatches) {
@@ -52,6 +64,7 @@ export async function POST(request: Request) {
       name: user.name,
       designation: user.designation,
       role: user.role,
+      storeId: membership?.storeId ?? null,
     };
     const token = await signAuthToken(authUser);
     const response = NextResponse.json({ user: authUser });

@@ -26,6 +26,7 @@ export function AdminShell({
         <AdminSidebar
           className="fixed inset-y-0 left-0 z-40 hidden lg:flex"
           showRolePermissions={user.role === "admin"}
+          storeManager={user.role === "store_manager"}
           sidebarItems={sidebarItems}
         />
         <SidebarInset>

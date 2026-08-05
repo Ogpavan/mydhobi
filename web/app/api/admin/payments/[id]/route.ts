@@ -29,6 +29,7 @@ export async function PATCH(
     const result = await updatePaymentStatus(
       id,
       body.status as PaymentStatus,
+      user.role === "store_manager" ? user.storeId : null,
     );
     if (result.kind === "not_found") {
       return NextResponse.json(

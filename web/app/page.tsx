@@ -34,7 +34,7 @@ export default function HomePage() {
       });
       const data = (await response.json()) as {
         message?: string;
-        user?: { role: "admin" | "staff" | "customer" };
+        user?: { role: "admin" | "staff" | "store_manager" | "customer" };
       };
 
       if (!response.ok) {

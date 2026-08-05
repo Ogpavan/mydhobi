@@ -90,8 +90,12 @@ function recentStatus(value: unknown): OrderStatus {
   return "New";
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+export async function getDashboardData(storeId?: string | null): Promise<DashboardData> {
   await Promise.all([ensureDeliverySchema(), ensurePaymentLedger()]);
+  const orderScope = storeId ? "AND store_id=$1" : "";
+  const taskScope = storeId ? "AND order_id IN (SELECT id FROM customer_orders WHERE store_id=$1)" : "";
+  const joinedOrderScope = storeId ? "AND orders.store_id=$1" : "";
+  const queryValues = storeId ? [storeId] : [];
   const [
     statsResult,
     chartResult,
@@ -104,29 +108,34 @@ export async function getDashboardData(): Promise<DashboardData> {
       SELECT
         (SELECT COUNT(*) FROM order_pickups
          WHERE (scheduled_at AT TIME ZONE 'Asia/Kolkata')::date =
-           (NOW() AT TIME ZONE 'Asia/Kolkata')::date)::int AS today_pickups,
+           (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+           ${taskScope})::int AS today_pickups,
         (SELECT COUNT(*) FROM order_pickups
          WHERE (scheduled_at AT TIME ZONE 'Asia/Kolkata')::date =
-           (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1)::int AS yesterday_pickups,
+           (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1
+           ${taskScope})::int AS yesterday_pickups,
         (SELECT COUNT(*) FROM order_deliveries
          WHERE (scheduled_at AT TIME ZONE 'Asia/Kolkata')::date =
-           (NOW() AT TIME ZONE 'Asia/Kolkata')::date)::int AS today_deliveries,
+           (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+           ${taskScope})::int AS today_deliveries,
         (SELECT COUNT(*) FROM order_deliveries
          WHERE (scheduled_at AT TIME ZONE 'Asia/Kolkata')::date =
-           (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1)::int AS yesterday_deliveries,
+           (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1
+           ${taskScope})::int AS yesterday_deliveries,
         (SELECT COUNT(*) FROM customer_orders
-         WHERE status NOT IN ('Delivered','Cancelled'))::int AS process_orders,
+         WHERE status NOT IN ('Delivered','Cancelled') ${orderScope})::int AS process_orders,
         (SELECT COUNT(*) FROM customer_orders
          WHERE status NOT IN ('Delivered','Cancelled')
            AND (created_at AT TIME ZONE 'Asia/Kolkata')::date <
-             (NOW() AT TIME ZONE 'Asia/Kolkata')::date)::int AS previous_process_orders,
+             (NOW() AT TIME ZONE 'Asia/Kolkata')::date ${orderScope})::int AS previous_process_orders,
         (SELECT COALESCE(SUM(amount),0) FROM customer_payments
-         WHERE status='Pending') AS pending_payments,
+         WHERE status='Pending' ${storeId ? "AND order_id IN (SELECT id FROM customer_orders WHERE store_id=$1)" : ""}) AS pending_payments,
         (SELECT COALESCE(SUM(amount),0) FROM customer_payments
          WHERE status='Pending'
            AND (created_at AT TIME ZONE 'Asia/Kolkata')::date <
-             (NOW() AT TIME ZONE 'Asia/Kolkata')::date) AS previous_pending_payments
-    `),
+             (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+           ${storeId ? "AND order_id IN (SELECT id FROM customer_orders WHERE store_id=$1)" : ""}) AS previous_pending_payments
+    `, queryValues),
     pool.query(`
       SELECT days.day::date AS report_date,
         COUNT(orders.id)::int AS orders
@@ -137,16 +146,17 @@ export async function getDashboardData(): Promise<DashboardData> {
       ) days(day)
       LEFT JOIN customer_orders orders
         ON (orders.created_at AT TIME ZONE 'Asia/Kolkata')::date=days.day::date
+        ${joinedOrderScope}
       GROUP BY days.day ORDER BY days.day
-    `),
+    `, queryValues),
     pool.query(`
       SELECT
         CASE WHEN status='Out for Delivery' THEN 'Ready' ELSE status END AS status,
         COUNT(*)::int AS orders
       FROM customer_orders
-      WHERE status <> 'Cancelled'
+      WHERE status <> 'Cancelled' ${orderScope}
       GROUP BY CASE WHEN status='Out for Delivery' THEN 'Ready' ELSE status END
-    `),
+    `, queryValues),
     pool.query(`
       SELECT pickups.order_id,users.name AS customer,orders.address_text,
         pickups.scheduled_at,pickups.status
@@ -155,8 +165,9 @@ export async function getDashboardData(): Promise<DashboardData> {
       INNER JOIN app_users users ON users.id=orders.user_id
       WHERE (pickups.scheduled_at AT TIME ZONE 'Asia/Kolkata')::date =
         (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+        ${joinedOrderScope}
       ORDER BY pickups.scheduled_at LIMIT 4
-    `),
+    `, queryValues),
     pool.query(`
       SELECT deliveries.order_id,users.name AS customer,orders.address_text,
         deliveries.scheduled_at,deliveries.status
@@ -165,15 +176,17 @@ export async function getDashboardData(): Promise<DashboardData> {
       INNER JOIN app_users users ON users.id=orders.user_id
       WHERE (deliveries.scheduled_at AT TIME ZONE 'Asia/Kolkata')::date =
         (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+        ${joinedOrderScope}
       ORDER BY deliveries.scheduled_at LIMIT 4
-    `),
+    `, queryValues),
     pool.query(`
       SELECT orders.id,users.name AS customer,orders.service,orders.pickup_at,
         orders.delivery_at,orders.status,orders.payment_status,orders.amount
       FROM customer_orders orders
       INNER JOIN app_users users ON users.id=orders.user_id
+      WHERE 1=1 ${joinedOrderScope}
       ORDER BY orders.created_at DESC LIMIT 8
-    `),
+    `, queryValues),
   ]);
 
   const stats = statsResult.rows[0];

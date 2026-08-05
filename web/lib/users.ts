@@ -13,7 +13,7 @@ type UserRow = {
   password_hash: string;
   name: string;
   designation: string;
-  role: "admin" | "staff" | "customer";
+  role: "admin" | "staff" | "store_manager" | "customer";
   status: "active" | "disabled";
 };
 
@@ -74,7 +74,7 @@ export function ensureUserLoginSchema() {
       END $$;
       ALTER TABLE app_users
       ADD CONSTRAINT app_users_role_check
-      CHECK (role IN ('admin', 'staff', 'customer'));
+      CHECK (role IN ('admin', 'staff', 'store_manager', 'customer'));
     `).then(() => undefined).catch((error) => {
       userSetupPromise = null;
       throw error;

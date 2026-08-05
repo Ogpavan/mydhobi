@@ -40,6 +40,7 @@ export type CustomerPayload = Omit<
 
 type CustomerRow = {
   id: string;
+  store_id: string | null;
   full_name: string;
   mobile: string;
   whatsapp: string;
@@ -66,7 +67,7 @@ type CustomerRow = {
 };
 
 const customerColumns = `
-  id, full_name, mobile, whatsapp, customer_type, house_flat_no, street_area,
+  id, store_id, full_name, mobile, whatsapp, customer_type, house_flat_no, street_area,
   landmark, city, pincode, google_maps_pin, pickup_frequency, assigned_rider,
   assigned_route, rate_card, payment_method, credit_customer, credit_limit,
   pickup_instructions, internal_notes, status, user_id, created_at
@@ -81,6 +82,7 @@ export function ensureCustomerTable() {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS customers (
         id BIGSERIAL PRIMARY KEY,
+        store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
         full_name VARCHAR(150) NOT NULL,
         mobile VARCHAR(10) NOT NULL,
         whatsapp VARCHAR(10) NOT NULL DEFAULT '',
@@ -117,6 +119,25 @@ export function ensureCustomerTable() {
         CREATE UNIQUE INDEX IF NOT EXISTS customers_mobile_unique ON customers (mobile);
         CREATE UNIQUE INDEX IF NOT EXISTS customers_user_id_unique
         ON customers (user_id) WHERE user_id IS NOT NULL;
+      `);
+      await pool.query(`
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL;
+        CREATE INDEX IF NOT EXISTS customers_store_id_idx ON customers(store_id);
+        UPDATE customers
+        SET store_id = (
+          SELECT orders.store_id
+          FROM customer_orders orders
+          WHERE orders.user_id = customers.user_id
+            AND orders.store_id IS NOT NULL
+          ORDER BY orders.created_at DESC
+          LIMIT 1
+        )
+        WHERE customers.store_id IS NULL
+          AND customers.user_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM customer_orders orders
+            WHERE orders.user_id = customers.user_id AND orders.store_id IS NOT NULL
+          );
       `);
     })().catch((error) => {
       setupPromise = null;
@@ -224,7 +245,7 @@ function mapCustomer(row: CustomerRow): Customer {
   };
 }
 
-export async function listCustomers() {
+export async function listCustomers(storeId?: string | null) {
   await Promise.all([ensureCustomerTable(), ensureCustomerPortalSchema()]);
   const { rows } = await pool.query<CustomerRow>(
     `SELECT ${customerColumns},
@@ -234,12 +255,14 @@ export async function listCustomers() {
          WHERE wallet.user_id = customers.user_id
        ), 0)::text AS wallet_balance
      FROM customers
+     WHERE ($1::uuid IS NULL OR customers.store_id = $1)
      ORDER BY created_at DESC`,
+    [storeId ?? null],
   );
   return rows.map(mapCustomer);
 }
 
-export async function getCustomerById(id: string) {
+export async function getCustomerById(id: string, storeId?: string | null) {
   await Promise.all([ensureCustomerTable(), ensureCustomerPortalSchema()]);
   const { rows } = await pool.query<CustomerRow>(
     `SELECT ${customerColumns},
@@ -249,14 +272,18 @@ export async function getCustomerById(id: string) {
          WHERE wallet.user_id = customers.user_id
        ), 0)::text AS wallet_balance
      FROM customers
-     WHERE id = $1
+     WHERE id = $1 AND ($2::uuid IS NULL OR store_id = $2)
      LIMIT 1`,
-    [id],
+    [id, storeId ?? null],
   );
   return rows[0] ? mapCustomer(rows[0]) : null;
 }
 
-export async function createCustomer(payload: CustomerPayload, passwordHash: string | null) {
+export async function createCustomer(
+  payload: CustomerPayload,
+  passwordHash: string | null,
+  storeId?: string | null,
+) {
   await ensureCustomerTable();
   const client = await pool.connect();
   try {
@@ -281,21 +308,22 @@ export async function createCustomer(payload: CustomerPayload, passwordHash: str
 
     const { rows } = await client.query<CustomerRow>(
       `INSERT INTO customers (
-        full_name, mobile, whatsapp, customer_type, house_flat_no, street_area,
+        store_id, full_name, mobile, whatsapp, customer_type, house_flat_no, street_area,
         landmark, city, pincode, google_maps_pin, pickup_frequency, assigned_rider,
         assigned_route, rate_card, payment_method, credit_customer, credit_limit,
         pickup_instructions, internal_notes, status, user_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20, $21, $22
       ) RETURNING ${customerColumns}`,
       [
-        payload.fullName, payload.mobile, payload.whatsapp, payload.customerType,
-        payload.houseFlatNo, payload.streetArea, payload.landmark, payload.city,
-        payload.pincode, payload.googleMapsPin, payload.pickupFrequency,
-        payload.assignedRider, payload.assignedRoute, payload.rateCard,
-        payload.paymentMethod, payload.creditCustomer, payload.creditLimit,
-        payload.pickupInstructions, payload.internalNotes, payload.status, userId,
+        storeId ?? null, payload.fullName, payload.mobile, payload.whatsapp,
+        payload.customerType, payload.houseFlatNo, payload.streetArea,
+        payload.landmark, payload.city, payload.pincode, payload.googleMapsPin,
+        payload.pickupFrequency, payload.assignedRider, payload.assignedRoute,
+        payload.rateCard, payload.paymentMethod, payload.creditCustomer,
+        payload.creditLimit, payload.pickupInstructions, payload.internalNotes,
+        payload.status, userId,
       ],
     );
     await client.query("COMMIT");
@@ -312,14 +340,15 @@ export async function updateCustomer(
   id: string,
   payload: CustomerPayload,
   passwordHash: string | null,
+  storeId?: string | null,
 ) {
   await ensureCustomerTable();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const existing = await client.query<{ user_id: string | null }>(
-      "SELECT user_id FROM customers WHERE id = $1 FOR UPDATE",
-      [id],
+      "SELECT user_id FROM customers WHERE id = $1 AND ($2::uuid IS NULL OR store_id = $2) FOR UPDATE",
+      [id, storeId ?? null],
     );
     if (!existing.rows[0]) {
       await client.query("ROLLBACK");
@@ -380,7 +409,7 @@ export async function updateCustomer(
       ],
     );
     await client.query("COMMIT");
-    return getCustomerById(id);
+    return getCustomerById(id, storeId);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -389,15 +418,20 @@ export async function updateCustomer(
   }
 }
 
-export async function updateCustomerStatus(id: string, status: CustomerStatus) {
+export async function updateCustomerStatus(
+  id: string,
+  status: CustomerStatus,
+  storeId?: string | null,
+) {
   await ensureCustomerTable();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const { rows } = await client.query<CustomerRow>(
       `UPDATE customers SET status = $2, updated_at = NOW()
-       WHERE id = $1 RETURNING ${customerColumns}`,
-      [id, status],
+       WHERE id = $1 AND ($3::uuid IS NULL OR store_id = $3)
+       RETURNING ${customerColumns}`,
+      [id, status, storeId ?? null],
     );
     if (rows[0]?.user_id) {
       await client.query("UPDATE app_users SET status = $2 WHERE id = $1", [
@@ -406,7 +440,7 @@ export async function updateCustomerStatus(id: string, status: CustomerStatus) {
       ]);
     }
     await client.query("COMMIT");
-    return rows[0] ? getCustomerById(id) : null;
+    return rows[0] ? getCustomerById(id, storeId) : null;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -415,14 +449,14 @@ export async function updateCustomerStatus(id: string, status: CustomerStatus) {
   }
 }
 
-export async function deleteCustomer(id: string) {
+export async function deleteCustomer(id: string, storeId?: string | null) {
   await ensureCustomerTable();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const result = await client.query<{ user_id: string | null }>(
-      "DELETE FROM customers WHERE id = $1 RETURNING user_id",
-      [id],
+      "DELETE FROM customers WHERE id = $1 AND ($2::uuid IS NULL OR store_id = $2) RETURNING user_id",
+      [id, storeId ?? null],
     );
     const userId = result.rows[0]?.user_id;
     if (userId) await client.query("DELETE FROM app_users WHERE id = $1", [userId]);

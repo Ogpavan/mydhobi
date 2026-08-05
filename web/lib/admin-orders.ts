@@ -46,7 +46,7 @@ function statusFromValue(value: unknown): PortalOrderStatus {
     : "New";
 }
 
-export async function listAdminOrders() {
+export async function listAdminOrders(storeId?: string | null) {
   await ensureCustomerPortalSchema();
   const { rows } = await pool.query(
     `SELECT orders.id,orders.service,orders.item_count,orders.amount,
@@ -55,7 +55,9 @@ export async function listAdminOrders() {
       users.mobile AS customer_mobile
      FROM customer_orders orders
      INNER JOIN app_users users ON users.id=orders.user_id
+     WHERE ($1::uuid IS NULL OR orders.store_id=$1)
      ORDER BY orders.created_at DESC`,
+    [storeId ?? null],
   );
 
   return rows.map(
@@ -75,14 +77,14 @@ export async function listAdminOrders() {
   );
 }
 
-export async function getAdminOrder(id: string): Promise<AdminOrder | null> {
+export async function getAdminOrder(id: string, storeId?: string | null): Promise<AdminOrder | null> {
   await ensureCustomerPortalSchema();
   const { rows } = await pool.query(
     `SELECT orders.user_id,users.name,users.mobile,users.email
      FROM customer_orders orders
      INNER JOIN app_users users ON users.id=orders.user_id
-     WHERE orders.id=$1 LIMIT 1`,
-    [id],
+     WHERE orders.id=$1 AND ($2::uuid IS NULL OR orders.store_id=$2) LIMIT 1`,
+    [id, storeId ?? null],
   );
   if (!rows[0]) return null;
 
@@ -98,7 +100,7 @@ export async function getAdminOrder(id: string): Promise<AdminOrder | null> {
   };
 }
 
-export async function getAdminOrderStats(): Promise<AdminOrderStats> {
+export async function getAdminOrderStats(storeId?: string | null): Promise<AdminOrderStats> {
   await ensureCustomerPortalSchema();
   const { rows } = await pool.query(
     `SELECT
@@ -110,7 +112,9 @@ export async function getAdminOrderStats(): Promise<AdminOrderStats> {
       COALESCE(SUM(amount) FILTER (
         WHERE payment_status='Paid' AND created_at::date=CURRENT_DATE
       ),0) AS today_revenue
-     FROM customer_orders`,
+     FROM customer_orders
+     WHERE ($1::uuid IS NULL OR store_id=$1)`,
+    [storeId ?? null],
   );
   return {
     total: Number(rows[0].total),
@@ -124,14 +128,15 @@ export async function updateAdminOrderStatus(
   id: string,
   nextStatus: PortalOrderStatus,
   note: string,
+  storeId?: string | null,
 ) {
   await ensureCustomerPortalSchema();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const currentResult = await client.query(
-      "SELECT user_id,status FROM customer_orders WHERE id=$1 FOR UPDATE",
-      [id],
+      "SELECT user_id,status FROM customer_orders WHERE id=$1 AND ($2::uuid IS NULL OR store_id=$2) FOR UPDATE",
+      [id, storeId ?? null],
     );
     if (!currentResult.rows[0]) {
       await client.query("ROLLBACK");
@@ -167,7 +172,7 @@ export async function updateAdminOrderStatus(
       ],
     );
     await client.query("COMMIT");
-    return { kind: "updated" as const, order: await getAdminOrder(id) };
+    return { kind: "updated" as const, order: await getAdminOrder(id, storeId) };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

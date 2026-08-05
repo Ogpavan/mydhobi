@@ -84,6 +84,7 @@ function AddMemberDialog({
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [selectedRole, setSelectedRole] = useState(member?.role ?? roles[0]?.name.toLowerCase() ?? "");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -98,6 +99,7 @@ function AddMemberDialog({
       email: String(formData.get("email") ?? ""),
       role: String(formData.get("role") ?? "").trim().toLowerCase(),
       status: "active",
+      password: String(formData.get("password") ?? ""),
     };
 
     try {
@@ -181,7 +183,8 @@ function AddMemberDialog({
             </span>
             <select
               name="role"
-              defaultValue={member?.role ?? roles[0]?.name.toLowerCase() ?? ""}
+              value={selectedRole}
+              onChange={(event) => setSelectedRole(event.target.value)}
               className="h-9 w-full rounded border border-[#DCE6F2] bg-white px-3 text-sm text-[#071333] outline-none focus:border-[#075DFF] focus:ring-1 focus:ring-[#075DFF]/20"
             >
               {roles.map((role) => (
@@ -191,6 +194,26 @@ function AddMemberDialog({
               ))}
             </select>
           </label>
+
+          {(selectedRole === "manager" || selectedRole === "store_manager") ? (
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-[#31405A]">
+                {member?.userId ? "New password (optional)" : "Login password"}
+                {!member?.userId ? <span className="text-red-500"> *</span> : null}
+              </span>
+              <Input
+                name="password"
+                type="password"
+                minLength={member?.userId ? 0 : 8}
+                required={!member?.userId}
+                autoComplete="new-password"
+                placeholder={member?.userId ? "Leave blank to keep current password" : "At least 8 characters"}
+              />
+              <p className="text-[11px] text-[#52627A]">
+                The manager signs in with this mobile number and password.
+              </p>
+            </label>
+          ) : null}
 
           {error ? (
             <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
@@ -208,7 +231,7 @@ function AddMemberDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Adding..." : "Add Member"}
+              {isSaving ? "Saving..." : member ? "Save Member" : "Add Member"}
             </Button>
           </div>
         </form>

@@ -21,19 +21,21 @@ function isUniqueViolation(error: unknown) {
 }
 
 export async function GET(_request: Request, { params }: RouteContext) {
-  if (!(await getCurrentUser())) {
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer") {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
-  const customer = await getCustomerById(id);
+  const customer = await getCustomerById(id, user.role === "store_manager" ? user.storeId : null);
   return customer
     ? NextResponse.json({ customer })
     : NextResponse.json({ message: "Customer not found." }, { status: 404 });
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
-  if (!(await getCurrentUser())) {
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer" || (user.role === "store_manager" && !user.storeId)) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
@@ -45,7 +47,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       Object.keys(body).length === 1 &&
       (body.status === "active" || body.status === "inactive")
     ) {
-      const customer = await updateCustomerStatus(id, body.status);
+      const customer = await updateCustomerStatus(id, body.status, user.role === "store_manager" ? user.storeId : null);
       return customer
         ? NextResponse.json({ customer })
         : NextResponse.json({ message: "Customer not found." }, { status: 404 });
@@ -65,7 +67,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
     const passwordHash = password ? await bcrypt.hash(password, 12) : null;
 
-    const customer = await updateCustomer(id, payload, passwordHash);
+    const customer = await updateCustomer(id, payload, passwordHash, user.role === "store_manager" ? user.storeId : null);
     return customer
       ? NextResponse.json({ customer })
       : NextResponse.json({ message: "Customer not found." }, { status: 404 });
@@ -85,13 +87,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 export async function DELETE(_request: Request, { params }: RouteContext) {
-  if (!(await getCurrentUser())) {
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer" || (user.role === "store_manager" && !user.storeId)) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const { id } = await params;
-    return await deleteCustomer(id)
+    return await deleteCustomer(id, user.role === "store_manager" ? user.storeId : null)
       ? NextResponse.json({ ok: true })
       : NextResponse.json({ message: "Customer not found." }, { status: 404 });
   } catch (error) {

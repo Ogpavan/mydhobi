@@ -75,6 +75,7 @@ export function ensureCustomerPortalSchema() {
       CREATE TABLE IF NOT EXISTS customer_orders (
         id VARCHAR(20) PRIMARY KEY,
         user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        store_id UUID,
         status VARCHAR(30) NOT NULL DEFAULT 'New',
         service VARCHAR(80) NOT NULL,
         item_count INTEGER NOT NULL,
@@ -94,6 +95,12 @@ export function ensureCustomerPortalSchema() {
       );
       ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(30);
       ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+      ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS store_id UUID;
+      UPDATE customer_orders
+      SET store_id = (SELECT id FROM stores WHERE status='active' ORDER BY store_number ASC LIMIT 1)
+      WHERE store_id IS NULL;
+      CREATE INDEX IF NOT EXISTS customer_orders_store_idx
+      ON customer_orders(store_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS customer_orders_user_idx
       ON customer_orders(user_id, created_at DESC);
       ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
@@ -170,6 +177,7 @@ export function ensureCustomerPortalSchema() {
       CREATE TABLE IF NOT EXISTS customer_complaints (
         id BIGSERIAL PRIMARY KEY,
         user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+        store_id UUID,
         subject VARCHAR(150) NOT NULL,
         details TEXT NOT NULL DEFAULT '',
         status VARCHAR(20) NOT NULL DEFAULT 'Open',
@@ -184,6 +192,19 @@ export function ensureCustomerPortalSchema() {
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
       ALTER TABLE customer_complaints
       ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+      ALTER TABLE customer_complaints ADD COLUMN IF NOT EXISTS store_id UUID;
+      UPDATE customer_complaints complaints
+      SET store_id = (
+        SELECT orders.store_id
+        FROM customer_orders orders
+        WHERE orders.user_id=complaints.user_id AND orders.store_id IS NOT NULL
+        ORDER BY orders.created_at DESC LIMIT 1
+      )
+      WHERE complaints.store_id IS NULL
+        AND EXISTS (
+          SELECT 1 FROM customer_orders orders
+          WHERE orders.user_id=complaints.user_id AND orders.store_id IS NOT NULL
+        );
       CREATE INDEX IF NOT EXISTS customer_complaints_user_idx
       ON customer_complaints(user_id, created_at DESC);
 
@@ -442,6 +463,10 @@ export async function createPortalOrder(
   const useReferral = referralDiscount >= couponDiscount && referral !== null;
   const discount = Math.max(referralDiscount, couponDiscount);
   const amount = subtotal - discount;
+  const storeResult = await pool.query<{ id: string }>(
+    `SELECT id FROM stores WHERE status='active' ORDER BY store_number ASC LIMIT 1`,
+  );
+  const storeId = storeResult.rows[0]?.id ?? null;
   const id = `ORD${randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
   const paymentStatus =
     input.paymentMethod === "cash" ? "Pending" : "Paid";
@@ -467,9 +492,9 @@ export async function createPortalOrder(
     }
     const { rows } = await client.query(
       `INSERT INTO customer_orders
-       (id,user_id,status,service,item_count,amount,pickup_at,payment_method,payment_status,address_text,instructions,coupon_code,discount_amount)
-       VALUES ($1,$2,'New',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [id, userId, input.service, itemCount, amount, input.pickupAt, input.paymentMethod, paymentStatus, input.address, input.instructions, !useReferral && coupon?.valid ? coupon.offer.code : useReferral ? "REFERRAL20" : null, discount],
+       (id,user_id,store_id,status,service,item_count,amount,pickup_at,payment_method,payment_status,address_text,instructions,coupon_code,discount_amount)
+       VALUES ($1,$2,$3,'New',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [id, userId, storeId, input.service, itemCount, amount, input.pickupAt, input.paymentMethod, paymentStatus, input.address, input.instructions, !useReferral && coupon?.valid ? coupon.offer.code : useReferral ? "REFERRAL20" : null, discount],
     );
     if (!useReferral && coupon?.valid) {
       await client.query(
@@ -604,11 +629,18 @@ export async function listPortalComplaints(userId: string) {
 
 export async function createPortalComplaint(userId: string, subject: string, details: string) {
   await ensureCustomerPortalSchema();
+  const storeResult = await pool.query<{ store_id: string }>(
+    `SELECT store_id FROM customer_orders
+     WHERE user_id=$1 AND store_id IS NOT NULL
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId],
+  );
+  const storeId = storeResult.rows[0]?.store_id ?? null;
   const { rows } = await pool.query(
-    `INSERT INTO customer_complaints (user_id,subject,details)
-     VALUES ($1,$2,$3)
+    `INSERT INTO customer_complaints (user_id,store_id,subject,details)
+     VALUES ($1,$2,$3,$4)
      RETURNING id,subject,details,response,status,created_at,updated_at,resolved_at`,
-    [userId, subject, details],
+    [userId, storeId, subject, details],
   );
   const row = rows[0];
   return {

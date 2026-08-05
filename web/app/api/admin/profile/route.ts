@@ -23,6 +23,12 @@ export async function PATCH(request: Request) {
     }else{
       await pool.query("UPDATE app_users SET name=$2,email=$3,mobile=$4,updated_at=NOW() WHERE id=$1",[user.id,name,email,mobile]);
     }
+    if (user.role === "store_manager") {
+      await pool.query(
+        "UPDATE store_team_members SET name=$2,email=$3,mobile=$4,updated_at=NOW() WHERE user_id=$1",
+        [user.id, name, email, mobile],
+      );
+    }
     const updated={...user,name,email,mobile};
     const response=NextResponse.json({user:updated});
     response.cookies.set({name:JWT_COOKIE_NAME,value:await signAuthToken(updated),httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production",path:"/",maxAge:JWT_MAX_AGE_SECONDS});

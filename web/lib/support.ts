@@ -76,26 +76,28 @@ const complaintSelect = `
   SELECT complaints.id, complaints.user_id, complaints.subject,
          complaints.details, complaints.response, complaints.status,
          complaints.created_at, complaints.updated_at, complaints.resolved_at,
-         users.name AS customer_name, users.mobile AS customer_mobile
+         users.name AS customer_name, users.mobile AS customer_mobile,
+         complaints.store_id
   FROM customer_complaints complaints
   INNER JOIN app_users users ON users.id = complaints.user_id
 `;
 
-export async function listComplaints() {
+export async function listComplaints(storeId?: string | null) {
   await ensureSupportSchema();
   const { rows } = await pool.query(
-    `${complaintSelect} ORDER BY
+    `${complaintSelect} WHERE ($1::uuid IS NULL OR complaints.store_id=$1) ORDER BY
       CASE complaints.status
         WHEN 'Open' THEN 1
         WHEN 'In Progress' THEN 2
         ELSE 3
       END,
       complaints.created_at DESC`,
+    [storeId ?? null],
   );
   return rows.map(mapComplaint);
 }
 
-export async function getComplaintStats(): Promise<ComplaintStats> {
+export async function getComplaintStats(storeId?: string | null): Promise<ComplaintStats> {
   await ensureSupportSchema();
   const { rows } = await pool.query(`
     SELECT
@@ -104,7 +106,8 @@ export async function getComplaintStats(): Promise<ComplaintStats> {
       COUNT(*) FILTER (WHERE status = 'Resolved')::int AS resolved,
       COUNT(*)::int AS total
     FROM customer_complaints
-  `);
+    WHERE ($1::uuid IS NULL OR store_id=$1)
+  `, [storeId ?? null]);
   return {
     open: Number(rows[0].open),
     inProgress: Number(rows[0].in_progress),
@@ -117,14 +120,15 @@ export async function updateComplaint(
   id: string,
   status: ComplaintStatus,
   response: string,
+  storeId?: string | null,
 ) {
   await ensureSupportSchema();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const current = await client.query(
-      "SELECT user_id, status FROM customer_complaints WHERE id = $1 FOR UPDATE",
-      [id],
+      "SELECT user_id, status FROM customer_complaints WHERE id = $1 AND ($2::uuid IS NULL OR store_id=$2) FOR UPDATE",
+      [id, storeId ?? null],
     );
     if (!current.rowCount) {
       await client.query("ROLLBACK");
