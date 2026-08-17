@@ -1,7 +1,7 @@
 "use client";
 
-import { AdminServicePricingClient } from "@/components/admin/admin-client-pages";
+import { AdminClientRedirect } from "@/components/admin/admin-client-redirect";
 
 export default function ServicePricingPage() {
-  return <AdminServicePricingClient />;
+  return <AdminClientRedirect href="/admin/services" />;
 }

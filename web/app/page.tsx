@@ -59,14 +59,13 @@ export default function HomePage() {
   }
 
   return (
-    <AuthShell title="Welcome Back 👋" cardless>
-      <h2 className="text-lg font-bold">Sign In</h2>
+    <AuthShell title="Welcome Back 👋" subtitle="Sign In" cardless>
 
-      <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
-        <label className="block text-xs font-semibold text-[#4d485c]">
+      <form className="mt-12 space-y-4" onSubmit={handleSubmit}>
+        <label className="block text-sm font-semibold text-[#4d485c]">
           Mobile Number
           <span className="relative mt-2 flex">
-            <span className="absolute inset-y-0 left-0 flex w-[86px] items-center gap-2 border-r border-[#e5e1eb] pl-3 text-sm font-medium text-[#403a50]">
+            <span className="absolute inset-y-0 left-0 flex w-[106px] items-center gap-2 border-r border-[#e5e1eb] pl-4 text-sm font-medium text-[#403a50]">
               <Smartphone className="h-4 w-4 text-[#716b82]" />
               +91
             </span>
@@ -81,7 +80,7 @@ export default function HomePage() {
                   .replace(/\D/g, "")
                   .slice(0, 10);
               }}
-              className={`${inputClassName} pl-[100px] pr-3`}
+              className={`${inputClassName} h-12 rounded-[10px] pl-[122px] pr-3`}
               placeholder="Enter mobile number"
               autoComplete="tel"
               required
@@ -89,14 +88,14 @@ export default function HomePage() {
           </span>
         </label>
 
-        <label className="block text-xs font-semibold text-[#4d485c]">
+        <label className="block text-sm font-semibold text-[#4d485c]">
           Password
           <span className="relative mt-2 flex">
             <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#716b82]" />
             <input
               name="password"
               type={showPassword ? "text" : "password"}
-              className={`${inputClassName} pl-10 pr-11`}
+              className={`${inputClassName} h-12 rounded-[10px] pl-10 pr-11`}
               placeholder="Enter your password"
               autoComplete="current-password"
               required
@@ -113,7 +112,7 @@ export default function HomePage() {
         </label>
 
         <div className="flex justify-end">
-          <Link href="/forgot-password" className="text-xs font-semibold text-[#7440dc] hover:underline">
+          <Link href="/forgot-password" className="text-sm font-semibold text-[#7440dc] hover:underline">
             Forgot Password?
           </Link>
         </div>

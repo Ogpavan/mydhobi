@@ -9,7 +9,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { startNavigationProgress } from "@/components/navigation-loader";
 
 const inputClassName =
-  "h-11 w-full rounded-[10px] border border-[#ddd9e8] bg-white text-sm text-[#25213a] outline-none transition placeholder:text-[#a09bad] focus:border-[#7440dc] focus:ring-2 focus:ring-[#7440dc]/10";
+  "h-12 w-full rounded-[10px] border border-[#ddd9e8] bg-white text-sm text-[#25213a] outline-none transition placeholder:text-[#a09bad] focus:border-[#7440dc] focus:ring-2 focus:ring-[#7440dc]/10";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -56,11 +56,11 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell title="Create Account ✨" backHref="/" className="p-5" cardless>
-      <h2 className="text-lg font-bold">Sign Up</h2>
+    <AuthShell title="Create Account ✨" backHref="/" className="pt-16" cardless showHero={false}>
+      <h2 className="text-center text-lg font-bold">Sign Up</h2>
 
-      <form onSubmit={submit} className="mt-4 space-y-3">
-        <label className="block text-xs font-semibold text-[#4d485c]">
+      <form onSubmit={submit} className="mt-8 space-y-4">
+        <label className="block text-sm font-semibold text-[#4d485c]">
           Full Name
           <span className="relative mt-1.5 flex">
             <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#716b82]" />
@@ -76,10 +76,10 @@ export default function RegisterPage() {
           </span>
         </label>
 
-        <label className="block text-xs font-semibold text-[#4d485c]">
+        <label className="block text-sm font-semibold text-[#4d485c]">
           Mobile Number
           <span className="relative mt-1.5 flex">
-            <span className="absolute inset-y-0 left-0 flex w-[82px] items-center gap-2 border-r border-[#e5e1eb] pl-3 text-sm font-medium text-[#403a50]">
+            <span className="absolute inset-y-0 left-0 flex w-[106px] items-center gap-2 border-r border-[#e5e1eb] pl-4 text-sm font-medium text-[#403a50]">
               <Smartphone className="h-4 w-4 text-[#716b82]" />
               +91
             </span>
@@ -97,7 +97,7 @@ export default function RegisterPage() {
                   .replace(/\D/g, "")
                   .slice(0, 10);
               }}
-              className={`${inputClassName} pl-[96px] pr-3`}
+              className={`${inputClassName} pl-[122px] pr-3`}
             />
           </span>
         </label>
@@ -136,7 +136,7 @@ export default function RegisterPage() {
 
         <button
           disabled={saving}
-          className="h-11 w-full rounded-[10px] bg-[linear-gradient(100deg,#9454f4,#7040dc)] text-sm font-bold text-white shadow-[0_8px_20px_rgba(116,64,220,0.22)] transition hover:brightness-95 disabled:opacity-60"
+          className="h-12 w-full rounded-[10px] bg-[linear-gradient(100deg,#9454f4,#7040dc)] text-sm font-bold text-white shadow-[0_8px_20px_rgba(116,64,220,0.22)] transition hover:brightness-95 disabled:opacity-60"
         >
           {saving ? "Creating..." : "Sign Up"}
         </button>
@@ -168,7 +168,7 @@ function PasswordField({
   autoComplete: string;
 }) {
   return (
-    <label className="block text-xs font-semibold text-[#4d485c]">
+    <label className="block text-sm font-semibold text-[#4d485c]">
       {label}
       <span className="relative mt-1.5 flex">
         <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#716b82]" />

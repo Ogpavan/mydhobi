@@ -46,7 +46,6 @@ export function AdminHeader({
     "/admin/rate-card": "Rate Card",
     "/admin/services": "Services",
     "/admin/services/categories": "Service Categories",
-    "/admin/services/pricing": "Pricing",
     "/admin/riders": "Riders",
     "/admin/payments": "Payments",
     "/admin/offers": "Offers & Coupons",

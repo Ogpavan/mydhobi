@@ -45,7 +45,6 @@ const navItems: NavItem[] = [
     children: [
       { title: "Categories", href: "/admin/services/categories" },
       { title: "Services", href: "/admin/services" },
-      { title: "Pricing", href: "/admin/services/pricing" },
     ],
   },
   { key: "inventory", title: "Inventory", href: "/admin/inventory" },
