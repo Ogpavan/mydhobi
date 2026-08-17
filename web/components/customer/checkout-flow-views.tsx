@@ -34,37 +34,44 @@ import { cn } from "@/lib/utils";
 
 export function ServiceDetailsView({ service }: { service: CatalogService }) {
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [cartHydrated, setCartHydrated] = useState(false);
   const [itemTab,setItemTab]=useState<"Popular"|"All">("Popular");
   const router = useRouter();
+  const cartImage = service.imagePath || "/wash_fold.png";
   const pricedItems = service.variants
     .filter((variant) => variant.isActive)
     .map((variant) => ({
       name: variant.name === "Standard" ? service.name : variant.name,
       price: variant.regularPrice,
       unit: variant.unit,
-      image: service.imagePath,
+      image: cartImage,
     }));
   const totalItems = Object.values(counts).reduce((sum, count) => sum + count, 0);
   const total = pricedItems.reduce((sum, item) => sum + (counts[item.name] ?? 0) * item.price, 0);
 
   useEffect(() => {
     const cart = readCustomerCart();
-    if (!cart) return;
+    if (!cart) {
+      setCartHydrated(true);
+      return;
+    }
     const serviceItems = cart.items.filter(
       (item) => (item.serviceSlug ?? cart.serviceSlug) === service.slug,
     );
     setCounts(Object.fromEntries(serviceItems.map((item) => [item.name, item.quantity])));
+    setCartHydrated(true);
   }, [service.slug]);
 
-  function addToCart() {
-    const items = pricedItems.flatMap((item) => {
-      const quantity = counts[item.name] ?? 0;
+  function selectedItems(nextCounts: Record<string, number>) {
+    return pricedItems.flatMap((item) => {
+      const quantity = nextCounts[item.name] ?? 0;
       return quantity > 0 ? [{ ...item, quantity, unitPrice: item.price }] : [];
     });
-    if (!items.length) {
-      toast.error("Add at least one item");
-      return;
-    }
+  }
+
+  function saveSelection(nextCounts: Record<string, number>) {
+    if (!cartHydrated) return;
+    const items = selectedItems(nextCounts);
     const currentCart = readCustomerCart();
     const existingItems = currentCart?.items ?? [];
     const otherServiceItems = existingItems.filter(
@@ -82,11 +89,20 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
       })),
     ];
     const hasMultipleServices = otherServiceItems.length > 0;
-    writeCustomerCart({
+    writeCustomerCart(nextItems.length ? {
       service: hasMultipleServices ? "Multiple Services" : service.name,
       serviceSlug: hasMultipleServices ? "" : service.slug,
       items: nextItems,
-    });
+    } : null);
+  }
+
+  function addToCart() {
+    const items = selectedItems(counts);
+    if (!items.length) {
+      toast.error("Add at least one item");
+      return;
+    }
+    saveSelection(counts);
     startNavigationProgress();
     router.push("/customer/cart");
   }
@@ -124,15 +140,15 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
             const count = counts[item.name] ?? 0;
             return (
               <div key={item.name} className="flex items-center gap-3 rounded-[12px] border border-[#e5e2eb] bg-white px-3 py-2">
-                <Image src={item.image} alt="" width={46} height={46} className="h-[46px] w-[46px] object-contain" />
+                <Image src={item.image || "/wash_fold.png"} alt="" width={46} height={46} className="h-[46px] w-[46px] object-contain" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-bold">{item.name}</p>
                       <p className="mt-1 text-[9px] text-[#77798a]">₹{item.price}/{item.unit.replace("_", " ")}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button type="button" aria-label={`Remove ${item.name}`} onClick={() => setCounts((current) => ({ ...current, [item.name]: Math.max(0, count - 1) }))} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f1eaff] text-[#7440dc]"><Minus className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label={`Remove ${item.name}`} onClick={() => { const next = { ...counts, [item.name]: Math.max(0, count - 1) }; setCounts(next); saveSelection(next); }} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f1eaff] text-[#7440dc]"><Minus className="h-3.5 w-3.5" /></button>
                   <span className="w-4 text-center text-[11px] font-bold">{count}</span>
-                  <button type="button" aria-label={`Add ${item.name}`} onClick={() => setCounts((current) => ({ ...current, [item.name]: count + 1 }))} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#7440dc] text-white"><Plus className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label={`Add ${item.name}`} onClick={() => { const next = { ...counts, [item.name]: count + 1 }; setCounts(next); saveSelection(next); }} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#7440dc] text-white"><Plus className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             );
@@ -179,7 +195,7 @@ export function CartView() {
         {loaded&&!cart?<p className="rounded-[12px] border border-dashed border-[#d8d4e2] bg-white px-4 py-12 text-center text-[11px] text-[#77798a]">Your cart is empty</p>:null}
         {cart?.items.map(item => (
           <div key={item.name} className="flex items-center gap-3 rounded-[12px] border border-[#e5e2eb] bg-white px-3 py-3">
-            <Image src={item.image} alt="" width={44} height={44} className="h-11 w-11 object-contain" />
+            <Image src={item.image || "/wash_fold.png"} alt="" width={44} height={44} className="h-11 w-11 object-contain" />
             <div className="min-w-0 flex-1"><p className="text-[11px] font-bold">{item.name}</p><p className="mt-1 text-[9px] text-[#77798a]">₹{item.unitPrice} × {item.quantity}</p></div>
             <div className="flex items-center gap-2"><button type="button" onClick={()=>updateQuantity(item.name,item.quantity-1)} aria-label={`Remove one ${item.name}`} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f1eaff] text-[#7440dc]"><Minus className="h-3.5 w-3.5" /></button><b className="w-4 text-center text-[11px]">{item.quantity}</b><button type="button" onClick={()=>updateQuantity(item.name,item.quantity+1)} aria-label={`Add one ${item.name}`} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#7440dc] text-white"><Plus className="h-3.5 w-3.5" /></button><button type="button" onClick={()=>updateQuantity(item.name,0)} aria-label={`Remove ${item.name}`} className="ml-1 text-[#df4651]"><Trash2 className="h-4 w-4" /></button></div>
           </div>
