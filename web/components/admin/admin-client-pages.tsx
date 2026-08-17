@@ -154,12 +154,12 @@ export function AdminServiceCategoriesClient() {
 }
 
 export function AdminServicePricingClient() {
-  const result = useAdminPageData<{ services: CatalogService[] }>(
+  const result = useAdminPageData<{ categories: ServiceCategory[]; services: CatalogService[] }>(
     "key=service-pricing",
     60_000,
   );
   if (!result.data) return <PageState {...result} />;
-  return <ServicePricingAdmin initialServices={result.data.services} />;
+  return <ServicePricingAdmin initialCategories={result.data.categories} initialServices={result.data.services} />;
 }
 
 export function AdminInventoryClient() {

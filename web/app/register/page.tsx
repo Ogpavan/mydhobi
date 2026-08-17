@@ -56,7 +56,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell title="Create Account ✨" backHref="/" className="p-5">
+    <AuthShell title="Create Account ✨" backHref="/" className="p-5" cardless>
       <h2 className="text-lg font-bold">Sign Up</h2>
 
       <form onSubmit={submit} className="mt-4 space-y-3">

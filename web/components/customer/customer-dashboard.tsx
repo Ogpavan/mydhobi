@@ -6,7 +6,7 @@ import { Bell, ChevronDown, MapPin } from "lucide-react";
 
 import { CustomerBottomNav } from "@/components/customer/customer-bottom-nav";
 import type { AuthUser } from "@/lib/auth";
-import type { CatalogService } from "@/lib/service-catalog";
+import type { ServiceCategory } from "@/lib/service-catalog";
 import type { Offer } from "@/lib/offers";
 
 type ActionItem = {
@@ -41,14 +41,14 @@ const quickActions: ActionItem[] = [
 export function CustomerDashboard({
   user,
   walletBalance,
-  services,
+  categories,
   location,
   unreadNotifications,
   offer,
 }: {
   user: AuthUser;
   walletBalance: number;
-  services: CatalogService[];
+  categories: ServiceCategory[];
   location: string;
   unreadNotifications: number;
   offer: Offer | null;
@@ -166,9 +166,9 @@ export function CustomerDashboard({
           />
         </Link>:null}
 
-        <section>
+        {categories.length > 0 ? <section>
           <div className="flex items-center justify-between px-0.5">
-            <h2 className="text-[14px] font-bold">Our Services</h2>
+            <h2 className="text-[14px] font-bold">Service Categories</h2>
             <Link
               href="/customer/services"
               className="rounded-md px-2 py-1 text-[11px] font-bold text-[#7d50dd] hover:bg-[#f2edff]"
@@ -177,30 +177,31 @@ export function CustomerDashboard({
             </Link>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-            {services.slice(0, 4).map((service) => (
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {categories.map((category) => (
               <Link
-                  key={service.id}
-                  href={`/customer/services/${service.slug}`}
-                  className="flex min-h-[92px] items-center gap-3 rounded-[12px] border border-[#e7e8f0] bg-[linear-gradient(140deg,#fff,#f6f8ff)] px-3 text-left shadow-[0_4px_12px_rgba(46,54,95,0.05)] transition hover:-translate-y-0.5 hover:border-[#d9d0f3]"
-                >
+                key={category.id}
+                href={`/customer/services?category=${encodeURIComponent(category.id)}`}
+                className="flex min-h-[124px] flex-col items-center justify-center gap-2.5 rounded-[12px] border border-[#e7e8f0] bg-white px-2 py-3 text-center shadow-[0_4px_12px_rgba(46,54,95,0.05)] transition hover:-translate-y-0.5 hover:border-[#d9d0f3]"
+              >
+                {category.imagePath ? (
                   <Image
-                    src={service.imagePath || "/wash_fold.png"}
+                    src={category.imagePath}
                     alt=""
-                    width={54}
-                    height={54}
-                    className="h-[54px] w-[54px] shrink-0 object-contain"
+                    width={58}
+                    height={58}
+                    className="h-[58px] w-[58px] shrink-0 object-contain"
                   />
-                  <span className="min-w-0">
-                    <span className="block text-[12px] font-bold leading-tight">{service.name}</span>
-                    <span className="mt-2 block text-[11px] text-[#65677b]">
-                      Starting ₹{service.regularPrice}/{service.unit}
-                    </span>
+                ) : (
+                  <span className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-[10px] bg-[#f0eaff] text-[18px] font-bold text-[#7440dc]">
+                    {category.name.slice(0, 1)}
                   </span>
+                )}
+                <span className="line-clamp-2 min-h-[28px] min-w-0 text-[12px] font-bold leading-[1.15]">{category.name}</span>
               </Link>
             ))}
           </div>
-        </section>
+        </section> : null}
 
       </main>
 

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { CustomerBottomNav } from "@/components/customer/customer-bottom-nav";
@@ -31,10 +32,19 @@ export function ServicesListView({
   services: CatalogService[];
   offer: Offer | null;
 }) {
+  const searchParams = useSearchParams();
+  const requestedCategoryId = searchParams.get("category");
   const [categoryId, setCategoryId] = useState("all");
   const [query, setQuery] = useState("");
   const [cartCount,setCartCount]=useState(0);
   useEffect(()=>{const update=()=>setCartCount(readCustomerCart()?.items.reduce((sum,item)=>sum+item.quantity,0)??0);update();window.addEventListener("mydhobi-cart-change",update);return()=>window.removeEventListener("mydhobi-cart-change",update);},[]);
+  useEffect(() => {
+    setCategoryId(
+      requestedCategoryId && categories.some((category) => category.id === requestedCategoryId)
+        ? requestedCategoryId
+        : "all",
+    );
+  }, [categories, requestedCategoryId]);
 
   const visibleServices = useMemo(() => {
     const search = query.trim().toLowerCase();

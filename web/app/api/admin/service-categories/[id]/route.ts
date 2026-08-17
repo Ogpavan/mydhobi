@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { updateServiceCategory } from "@/lib/service-catalog";
+import { deleteServiceCategory, updateServiceCategory } from "@/lib/service-catalog";
 import { getCurrentUser } from "@/lib/session";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,4 +16,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
   if (!category) return NextResponse.json({ message: "Category not found." }, { status: 404 });
   return NextResponse.json({ category });
+}
+
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user || user.role === "customer") return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  try {
+    const deleted = await deleteServiceCategory(id);
+    if (!deleted) return NextResponse.json({ message: "Category not found." }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Delete service category failed", error);
+    return NextResponse.json({ message: "Unable to delete category." }, { status: 500 });
+  }
 }

@@ -17,11 +17,13 @@ export function AuthShell({
   backHref,
   children,
   className,
+  cardless = false,
 }: {
   title: string;
   backHref?: string;
   children: React.ReactNode;
   className?: string;
+  cardless?: boolean;
 }) {
   const backClassName =
     "absolute left-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/75 text-[#25213a] shadow-sm backdrop-blur transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7440dc]";
@@ -55,14 +57,18 @@ export function AuthShell({
         </div>
 
         <div className="relative z-10 -mt-3 flex flex-1 flex-col px-4 pb-5 sm:px-5 lg:mt-0 lg:min-h-full lg:px-10 lg:py-8">
-          <div
-            className={cn(
-              "rounded-[17px] border border-white/80 bg-white/95 p-5 shadow-[0_12px_34px_rgba(57,39,104,0.09)] lg:mt-auto lg:p-6",
-              className,
-            )}
-          >
-            {children}
-          </div>
+          {cardless ? (
+            <div className={cn("lg:mt-auto", className)}>{children}</div>
+          ) : (
+            <div
+              className={cn(
+                "rounded-[17px] border border-white/80 bg-white/95 p-5 shadow-[0_12px_34px_rgba(57,39,104,0.09)] lg:mt-auto lg:p-6",
+                className,
+              )}
+            >
+              {children}
+            </div>
+          )}
 
           <div className="mt-auto grid grid-cols-3 gap-2 px-1 pb-1 pt-7 lg:pt-8">
             {benefits.map(({ label, icon: Icon }) => (

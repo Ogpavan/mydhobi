@@ -32,21 +32,18 @@ import {
 import type { CatalogService } from "@/lib/service-catalog";
 import { cn } from "@/lib/utils";
 
-const catalogItems = [
-  { name: "Shirt", price: 40, image: "/ironwashing.png" },
-  { name: "Pant", price: 40, image: "/dryclean.png" },
-  { name: "T-Shirt", price: 35, image: "/wash_fold.png" },
-  { name: "Towel", price: 30, image: "/wash_fold.png" },
-];
-
 export function ServiceDetailsView({ service }: { service: CatalogService }) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [itemTab,setItemTab]=useState<"Popular"|"All">("Popular");
   const router = useRouter();
-  const pricedItems = catalogItems.map((item) => ({
-    ...item,
-    price: service.regularPrice,
-  }));
+  const pricedItems = service.variants
+    .filter((variant) => variant.isActive)
+    .map((variant) => ({
+      name: variant.name === "Standard" ? service.name : variant.name,
+      price: variant.regularPrice,
+      unit: variant.unit,
+      image: service.imagePath,
+    }));
   const totalItems = Object.values(counts).reduce((sum, count) => sum + count, 0);
   const total = pricedItems.reduce((sum, item) => sum + (counts[item.name] ?? 0) * item.price, 0);
 
@@ -109,7 +106,7 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
                 <Image src={item.image} alt="" width={46} height={46} className="h-[46px] w-[46px] object-contain" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-bold">{item.name}</p>
-                  <p className="mt-1 text-[9px] text-[#77798a]">₹{item.price}/{service.unit}</p>
+                      <p className="mt-1 text-[9px] text-[#77798a]">₹{item.price}/{item.unit.replace("_", " ")}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button type="button" aria-label={`Remove ${item.name}`} onClick={() => setCounts((current) => ({ ...current, [item.name]: Math.max(0, count - 1) }))} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f1eaff] text-[#7440dc]"><Minus className="h-3.5 w-3.5" /></button>

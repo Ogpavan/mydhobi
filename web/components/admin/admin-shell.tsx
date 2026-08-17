@@ -20,7 +20,6 @@ export function AdminShell({
     <SidebarProvider defaultOpen>
       <AdminAppPreloader
         sidebarItems={sidebarItems}
-        showAdminRoutes={user.role === "admin"}
       />
       <div className="min-h-screen bg-[#FBFDFF]">
         <AdminSidebar

@@ -45,7 +45,7 @@ export function CustomerHomeClient() {
   const home = useCustomerData<{
     user: AuthUser;
     wallet: WalletResponse["wallet"];
-    services: CatalogService[];
+    categories: ServiceCategory[];
     addresses: PortalAddress[];
     notifications: NotificationsResponse["notifications"];
     offers: Offer[];
@@ -60,7 +60,7 @@ export function CustomerHomeClient() {
     <CustomerDashboard
       user={home.data.user}
       walletBalance={home.data.wallet.balance}
-      services={home.data.services}
+      categories={home.data.categories}
       location={address ? `${address.city} - ${address.pincode}` : "Add pickup address"}
       unreadNotifications={home.data.notifications.filter((item) => !item.is_read).length}
       offer={home.data.offers[0] ?? null}

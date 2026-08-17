@@ -59,7 +59,7 @@ export default function HomePage() {
   }
 
   return (
-    <AuthShell title="Welcome Back 👋">
+    <AuthShell title="Welcome Back 👋" cardless>
       <h2 className="text-lg font-bold">Sign In</h2>
 
       <form className="mt-5 space-y-4" onSubmit={handleSubmit}>

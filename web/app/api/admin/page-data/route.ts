@@ -149,8 +149,13 @@ export async function GET(request: Request) {
     }
     case "service-categories":
       return response({ categories: await listServiceCategories(true) });
-    case "service-pricing":
-      return response({ services: await listCatalogServices(true) });
+    case "service-pricing": {
+      const [categories, services] = await Promise.all([
+        listServiceCategories(true),
+        listCatalogServices(true),
+      ]);
+      return response({ categories, services });
+    }
     case "inventory": {
       const [items, categories, units] = await Promise.all([
         listInventoryItems(storeId),

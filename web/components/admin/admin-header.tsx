@@ -36,6 +36,7 @@ export function AdminHeader({
   const router = useRouter();
   const pathname = usePathname();
   const [searchQuery,setSearchQuery]=useState("");
+  const [signingOut, setSigningOut] = useState(false);
   const [alerts,setAlerts]=useState<Array<{id:string;title:string;message:string;href:string;createdAt:string}>>([]);
   const [alertsLoading,setAlertsLoading]=useState(false);
   const operationalTitles: Record<string, string> = {
@@ -121,16 +122,23 @@ export function AdminHeader({
         };
 
   async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
     try {
-      await fetch("/api/auth/logout", {
+      const response = await fetch("/api/auth/logout", {
         method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
       });
+      if (!response.ok) {
+        throw new Error(`Logout failed (${response.status})`);
+      }
 
       toast.success("Signed out");
       startNavigationProgress();
-      router.replace("/");
-      router.refresh();
+      window.location.replace("/");
     } catch {
+      setSigningOut(false);
       toast.error("Unable to sign out right now");
     }
   }
@@ -258,7 +266,15 @@ export function AdminHeader({
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                void handleSignOut();
+              }}
+              disabled={signingOut}
+            >
+              {signingOut ? "Signing out..." : "Sign out"}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

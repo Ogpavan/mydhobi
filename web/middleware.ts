@@ -44,7 +44,9 @@ export async function middleware(request: NextRequest) {
 
   if (user?.role === "store_manager" &&
       ((pathname.startsWith("/admin") && !startsWithRoute(storeManagerPages)) ||
-        (pathname.startsWith("/api/") && !startsWithRoute(storeManagerApis)))) {
+        (pathname.startsWith("/api/") &&
+          !pathname.startsWith("/api/auth/") &&
+          !startsWithRoute(storeManagerApis)))) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }

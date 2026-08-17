@@ -9,6 +9,20 @@ export type ServiceCategory = {
   isActive: boolean;
 };
 
+export const CATALOG_UNITS = ["piece", "kg", "pair", "seat", "sq_ft", "set", "fixed"] as const;
+export type CatalogUnit = (typeof CATALOG_UNITS)[number];
+
+export type CatalogVariant = {
+  id: string;
+  serviceId: string;
+  name: string;
+  unit: CatalogUnit;
+  regularPrice: number;
+  expressPrice: number | null;
+  displayOrder: number;
+  isActive: boolean;
+};
+
 export type CatalogService = {
   id: string;
   categoryId: string;
@@ -16,12 +30,13 @@ export type CatalogService = {
   name: string;
   slug: string;
   imagePath: string;
-  unit: "kg" | "item";
+  unit: CatalogUnit;
   regularPrice: number;
   expressPrice: number | null;
   turnaround: string;
   displayOrder: number;
   isActive: boolean;
+  variants: CatalogVariant[];
 };
 
 let setupPromise: Promise<void> | null = null;
@@ -53,41 +68,44 @@ export function ensureServiceCatalogSchema() {
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CONSTRAINT catalog_services_unit CHECK (unit IN ('kg','item')),
+        CONSTRAINT catalog_services_unit CHECK (unit IN ('piece','kg','pair','seat','sq_ft','set','fixed','item')),
         CONSTRAINT catalog_services_regular_price CHECK (regular_price >= 0),
         CONSTRAINT catalog_services_express_price CHECK (express_price IS NULL OR express_price >= 0)
       );
       CREATE INDEX IF NOT EXISTS catalog_services_category_idx
       ON catalog_services(category_id, display_order);
 
-      INSERT INTO service_categories (name,slug,image_path,display_order)
-      VALUES
-        ('Laundry','laundry','/wash_fold.png',1),
-        ('Dry Clean','dry-clean','/dryclean.png',2),
-        ('Ironing','ironing','/stream.png',3),
-        ('Special Care','special-care','',4)
-      ON CONFLICT (slug) DO NOTHING;
+      ALTER TABLE catalog_services DROP CONSTRAINT IF EXISTS catalog_services_unit;
+      ALTER TABLE catalog_services
+        ADD CONSTRAINT catalog_services_unit
+        CHECK (unit IN ('piece','kg','pair','seat','sq_ft','set','fixed','item'));
 
-      INSERT INTO catalog_services
-        (category_id,name,slug,image_path,unit,regular_price,express_price,turnaround,display_order)
-      SELECT id,'Wash & Fold','wash-fold','/wash_fold.png','kg',40,60,'1-2 Days',1
-      FROM service_categories WHERE slug='laundry'
-      ON CONFLICT (slug) DO NOTHING;
-      INSERT INTO catalog_services
-        (category_id,name,slug,image_path,unit,regular_price,express_price,turnaround,display_order)
-      SELECT id,'Wash & Iron','wash-iron','/ironwashing.png','kg',60,85,'1-2 Days',2
-      FROM service_categories WHERE slug='laundry'
-      ON CONFLICT (slug) DO NOTHING;
-      INSERT INTO catalog_services
-        (category_id,name,slug,image_path,unit,regular_price,express_price,turnaround,display_order)
-      SELECT id,'Dry Clean','dry-clean','/dryclean.png','kg',120,180,'2-3 Days',1
-      FROM service_categories WHERE slug='dry-clean'
-      ON CONFLICT (slug) DO NOTHING;
-      INSERT INTO catalog_services
-        (category_id,name,slug,image_path,unit,regular_price,express_price,turnaround,display_order)
-      SELECT id,'Steam Iron','steam-iron','/stream.png','item',50,75,'Same Day',1
-      FROM service_categories WHERE slug='ironing'
-      ON CONFLICT (slug) DO NOTHING;
+      CREATE TABLE IF NOT EXISTS catalog_service_variants (
+        id BIGSERIAL PRIMARY KEY,
+        service_id BIGINT NOT NULL REFERENCES catalog_services(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        unit VARCHAR(20) NOT NULL,
+        regular_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+        express_price NUMERIC(12,2),
+        display_order INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT catalog_service_variants_unit CHECK (unit IN ('piece','kg','pair','seat','sq_ft','set','fixed')),
+        CONSTRAINT catalog_service_variants_regular_price CHECK (regular_price >= 0),
+        CONSTRAINT catalog_service_variants_express_price CHECK (express_price IS NULL OR express_price >= 0),
+        UNIQUE (service_id, name)
+      );
+      CREATE INDEX IF NOT EXISTS catalog_service_variants_service_idx
+        ON catalog_service_variants(service_id, display_order);
+
+      CREATE TABLE IF NOT EXISTS service_catalog_images (
+        id BIGSERIAL PRIMARY KEY,
+        image_data BYTEA NOT NULL,
+        image_mime VARCHAR(40) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
     `).then(() => undefined).catch((error) => {
       setupPromise = null;
       throw error;
@@ -117,7 +135,25 @@ function mapCategory(row: Record<string, unknown>): ServiceCategory {
   };
 }
 
-function mapService(row: Record<string, unknown>): CatalogService {
+function mapUnit(value: unknown): CatalogUnit {
+  return CATALOG_UNITS.includes(value as CatalogUnit) ? value as CatalogUnit : "piece";
+}
+
+function mapVariant(row: Record<string, unknown>): CatalogVariant {
+  return {
+    id: String(row.id),
+    serviceId: String(row.service_id),
+    name: String(row.name),
+    unit: mapUnit(row.unit),
+    regularPrice: Number(row.regular_price),
+    expressPrice: row.express_price === null ? null : Number(row.express_price),
+    displayOrder: Number(row.display_order),
+    isActive: Boolean(row.is_active),
+  };
+}
+
+function mapService(row: Record<string, unknown>, variants: CatalogVariant[] = []): CatalogService {
+  const firstVariant = variants[0];
   return {
     id: String(row.id),
     categoryId: String(row.category_id),
@@ -125,12 +161,13 @@ function mapService(row: Record<string, unknown>): CatalogService {
     name: String(row.name),
     slug: String(row.slug),
     imagePath: String(row.image_path),
-    unit: row.unit === "item" ? "item" : "kg",
-    regularPrice: Number(row.regular_price),
-    expressPrice: row.express_price === null ? null : Number(row.express_price),
+    unit: variants.length ? firstVariant!.unit : mapUnit(row.unit === "item" ? "piece" : row.unit),
+    regularPrice: variants.length ? firstVariant!.regularPrice : Number(row.regular_price),
+    expressPrice: variants.length ? firstVariant!.expressPrice : (row.express_price === null ? null : Number(row.express_price)),
     turnaround: String(row.turnaround),
     displayOrder: Number(row.display_order),
     isActive: Boolean(row.is_active),
+    variants,
   };
 }
 
@@ -160,6 +197,30 @@ export async function createServiceCategory(input: {
   return mapCategory(rows[0]);
 }
 
+export async function createServiceCatalogImage(data: Buffer, mime: string) {
+  await ensureServiceCatalogSchema();
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO service_catalog_images (image_data, image_mime)
+     VALUES ($1, $2) RETURNING id`,
+    [data, mime],
+  );
+  return String(rows[0].id);
+}
+
+export async function getServiceCatalogImage(id: string) {
+  await ensureServiceCatalogSchema();
+  const { rows } = await pool.query<{
+    image_data: Buffer;
+    image_mime: string;
+  }>(
+    `SELECT image_data, image_mime
+     FROM service_catalog_images
+     WHERE id = $1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
 export async function updateServiceCategory(
   id: string,
   input: Partial<Pick<ServiceCategory, "name" | "imagePath" | "displayOrder" | "isActive">>,
@@ -177,12 +238,70 @@ export async function updateServiceCategory(
   return mapCategory(rows[0]);
 }
 
+export async function deleteServiceCategory(id: string) {
+  await ensureServiceCatalogSchema();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const category = await client.query(
+      "SELECT id FROM service_categories WHERE id=$1 FOR UPDATE",
+      [id],
+    );
+    if (!category.rows[0]) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+
+    await client.query("DELETE FROM catalog_services WHERE category_id=$1", [id]);
+    await client.query("DELETE FROM service_categories WHERE id=$1", [id]);
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteCatalogService(id: string) {
+  await ensureServiceCatalogSchema();
+  const result = await pool.query("DELETE FROM catalog_services WHERE id=$1 RETURNING id", [id]);
+  return Boolean(result.rows[0]);
+}
+
 const serviceSelect = `
   services.id,services.category_id,categories.name AS category_name,
   services.name,services.slug,services.image_path,services.unit,
   services.regular_price,services.express_price,services.turnaround,
   services.display_order,services.is_active
 `;
+
+const variantSelect = `
+  variants.id,variants.service_id,variants.name,variants.unit,
+  variants.regular_price,variants.express_price,variants.display_order,
+  variants.is_active
+`;
+
+async function attachVariants(rows: Record<string, unknown>[]) {
+  if (!rows.length) return [] as CatalogService[];
+  const variantResult = await pool.query(
+    `SELECT ${variantSelect}
+     FROM catalog_service_variants variants
+     WHERE variants.service_id = ANY($1::bigint[])
+     ORDER BY variants.display_order,variants.name`,
+    [rows.map((row) => String(row.id))],
+  );
+  const variantsByService = new Map<string, CatalogVariant[]>();
+  for (const row of variantResult.rows) {
+    const variant = mapVariant(row);
+    const current = variantsByService.get(variant.serviceId) ?? [];
+    current.push(variant);
+    variantsByService.set(variant.serviceId, current);
+  }
+  return rows.map((row) => mapService(row, variantsByService.get(String(row.id)) ?? []));
+}
 
 export async function listCatalogServices(includeInactive = true) {
   await ensureServiceCatalogSchema();
@@ -193,7 +312,7 @@ export async function listCatalogServices(includeInactive = true) {
      ${includeInactive ? "" : "WHERE services.is_active=TRUE AND categories.is_active=TRUE"}
      ORDER BY categories.display_order,services.display_order,services.name`,
   );
-  return rows.map(mapService);
+  return attachVariants(rows);
 }
 
 export async function getCatalogServiceBySlug(slug: string) {
@@ -205,27 +324,48 @@ export async function getCatalogServiceBySlug(slug: string) {
      WHERE services.slug=$1 AND services.is_active=TRUE AND categories.is_active=TRUE LIMIT 1`,
     [slug],
   );
-  return rows[0] ? mapService(rows[0]) : null;
+  if (!rows[0]) return null;
+  const services = await attachVariants(rows);
+  return services[0] ?? null;
 }
 
 export async function createCatalogService(input: {
   categoryId: string;
   name: string;
   imagePath: string;
-  unit: "kg" | "item";
+  unit: CatalogUnit;
   regularPrice: number;
   expressPrice: number | null;
   turnaround: string;
   displayOrder: number;
+  variantName?: string;
 }) {
   await ensureServiceCatalogSchema();
-  const { rows } = await pool.query(
-    `INSERT INTO catalog_services
-     (category_id,name,slug,image_path,unit,regular_price,express_price,turnaround,display_order)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-    [input.categoryId, input.name, slugifyCatalogName(input.name), input.imagePath, input.unit, input.regularPrice, input.expressPrice, input.turnaround, input.displayOrder],
-  );
-  return (await getCatalogServiceById(String(rows[0].id)))!;
+  const client = await pool.connect();
+  let id = "";
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `INSERT INTO catalog_services
+       (category_id,name,slug,image_path,unit,regular_price,express_price,turnaround,display_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [input.categoryId, input.name, slugifyCatalogName(input.name), input.imagePath, input.unit, input.regularPrice, input.expressPrice, input.turnaround, input.displayOrder],
+    );
+    id = String(rows[0].id);
+    await client.query(
+      `INSERT INTO catalog_service_variants
+       (service_id,name,unit,regular_price,express_price,display_order)
+       VALUES ($1,$2,$3,$4,$5,0)`,
+      [id, input.variantName?.trim() || "Standard", input.unit, input.regularPrice, input.expressPrice],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return (await getCatalogServiceById(id))!;
 }
 
 export async function getCatalogServiceById(id: string) {
@@ -236,12 +376,14 @@ export async function getCatalogServiceById(id: string) {
      WHERE services.id=$1 LIMIT 1`,
     [id],
   );
-  return rows[0] ? mapService(rows[0]) : null;
+  if (!rows[0]) return null;
+  const services = await attachVariants(rows);
+  return services[0] ?? null;
 }
 
 export async function updateCatalogService(
   id: string,
-  input: Partial<Omit<CatalogService, "id" | "categoryName" | "slug">>,
+  input: Partial<Pick<CatalogService, "categoryId" | "name" | "imagePath" | "unit" | "regularPrice" | "expressPrice" | "turnaround" | "displayOrder" | "isActive">> & { variantName?: string },
 ) {
   await ensureServiceCatalogSchema();
   const current = await getCatalogServiceById(id);
@@ -253,5 +395,46 @@ export async function updateCatalogService(
      WHERE id=$1`,
     [id, input.categoryId ?? current.categoryId, name, slugifyCatalogName(name), input.imagePath ?? current.imagePath, input.unit ?? current.unit, input.regularPrice ?? current.regularPrice, input.expressPrice === undefined ? current.expressPrice : input.expressPrice, input.turnaround ?? current.turnaround, input.displayOrder ?? current.displayOrder, input.isActive ?? current.isActive],
   );
+  const variant = await pool.query(
+    `SELECT id,name FROM catalog_service_variants WHERE service_id=$1 ORDER BY display_order,id LIMIT 1`,
+    [id],
+  );
+  if (variant.rows[0]) {
+    await pool.query(
+      `UPDATE catalog_service_variants
+       SET name=$2,unit=$3,regular_price=$4,express_price=$5,updated_at=NOW()
+       WHERE id=$1`,
+      [variant.rows[0].id, input.variantName ?? variant.rows[0].name, input.unit ?? current.unit, input.regularPrice ?? current.regularPrice, input.expressPrice === undefined ? current.expressPrice : input.expressPrice],
+    );
+  }
   return getCatalogServiceById(id);
+}
+
+export async function updateCatalogServiceVariant(
+  id: string,
+  input: Partial<Pick<CatalogVariant, "name" | "unit" | "regularPrice" | "expressPrice" | "displayOrder" | "isActive">>,
+) {
+  await ensureServiceCatalogSchema();
+  const current = await pool.query(
+    `SELECT ${variantSelect} FROM catalog_service_variants variants WHERE variants.id=$1`,
+    [id],
+  );
+  if (!current.rows[0]) return null;
+  const row = current.rows[0];
+  const { rows } = await pool.query(
+    `UPDATE catalog_service_variants
+     SET name=$2,unit=$3,regular_price=$4,express_price=$5,display_order=$6,is_active=$7,updated_at=NOW()
+     WHERE id=$1
+     RETURNING id,service_id,name,unit,regular_price,express_price,display_order,is_active`,
+    [
+      id,
+      input.name ?? row.name,
+      input.unit ?? row.unit,
+      input.regularPrice ?? row.regular_price,
+      input.expressPrice === undefined ? row.express_price : input.expressPrice,
+      input.displayOrder ?? row.display_order,
+      input.isActive ?? row.is_active,
+    ],
+  );
+  return mapVariant(rows[0]);
 }
