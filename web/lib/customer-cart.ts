@@ -3,6 +3,8 @@ export type CustomerCartItem = {
   quantity: number;
   unitPrice: number;
   image: string;
+  service?: string;
+  serviceSlug?: string;
 };
 
 export type CustomerCart = {

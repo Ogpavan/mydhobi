@@ -47,6 +47,15 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
   const totalItems = Object.values(counts).reduce((sum, count) => sum + count, 0);
   const total = pricedItems.reduce((sum, item) => sum + (counts[item.name] ?? 0) * item.price, 0);
 
+  useEffect(() => {
+    const cart = readCustomerCart();
+    if (!cart) return;
+    const serviceItems = cart.items.filter(
+      (item) => (item.serviceSlug ?? cart.serviceSlug) === service.slug,
+    );
+    setCounts(Object.fromEntries(serviceItems.map((item) => [item.name, item.quantity])));
+  }, [service.slug]);
+
   function addToCart() {
     const items = pricedItems.flatMap((item) => {
       const quantity = counts[item.name] ?? 0;
@@ -56,15 +65,27 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
       toast.error("Add at least one item");
       return;
     }
-    writeCustomerCart({
-      service: service.name,
-      serviceSlug: service.slug,
-      items: items.map(({ name, quantity, unitPrice, image }) => ({
+    const currentCart = readCustomerCart();
+    const existingItems = currentCart?.items ?? [];
+    const otherServiceItems = existingItems.filter(
+      (item) => (item.serviceSlug ?? currentCart?.serviceSlug) !== service.slug,
+    );
+    const nextItems = [
+      ...otherServiceItems,
+      ...items.map(({ name, quantity, unitPrice, image }) => ({
         name,
         quantity,
         unitPrice,
         image,
+        service: service.name,
+        serviceSlug: service.slug,
       })),
+    ];
+    const hasMultipleServices = otherServiceItems.length > 0;
+    writeCustomerCart({
+      service: hasMultipleServices ? "Multiple Services" : service.name,
+      serviceSlug: hasMultipleServices ? "" : service.slug,
+      items: nextItems,
     });
     startNavigationProgress();
     router.push("/customer/cart");
@@ -153,7 +174,7 @@ export function CartView() {
   }
   return (
     <div className="min-h-screen bg-[#fafafe] pb-24 text-[#17182c]">
-      <CustomerSimpleHeader title="My Cart" backHref={cart?`/customer/services/${cart.serviceSlug}`:"/customer/services"} />
+      <CustomerSimpleHeader title="My Cart" backHref={cart?.serviceSlug ? `/customer/services/${cart.serviceSlug}` : "/customer/services"} />
       <main className="mx-auto max-w-[720px] space-y-3 px-4 py-4">
         {loaded&&!cart?<p className="rounded-[12px] border border-dashed border-[#d8d4e2] bg-white px-4 py-12 text-center text-[11px] text-[#77798a]">Your cart is empty</p>:null}
         {cart?.items.map(item => (
