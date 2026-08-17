@@ -55,7 +55,8 @@ export async function middleware(request: NextRequest) {
 
   const isAdminApi = pathname.startsWith("/api/") &&
     !pathname.startsWith("/api/auth/") &&
-    !pathname.startsWith("/api/customer/");
+    !pathname.startsWith("/api/customer/") &&
+    !pathname.startsWith("/api/service-catalog-images/");
   if (isAdminApi && user?.role === "customer") {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
