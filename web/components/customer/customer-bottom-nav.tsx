@@ -3,7 +3,7 @@ import {
   Home,
   Sparkles,
   UserRound,
-  WalletCards,
+  WalletMinimal,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -16,7 +16,7 @@ const items = [
   { id: "home", label: "Home", icon: Home, href: "/customer" },
   { id: "orders", label: "Orders", icon: ClipboardList, href: "/customer/orders" },
   { id: "services", label: "Services", icon: Sparkles, href: "/customer/services" },
-  { id: "wallet", label: "Wallet", icon: WalletCards, href: "/customer/wallet" },
+  { id: "wallet", label: "Wallet", icon: WalletMinimal, href: "/customer/wallet" },
   { id: "profile", label: "Profile", icon: UserRound, href: "/customer/profile" },
 ] satisfies Array<{
   id: CustomerNavItem;
