@@ -6,5 +6,5 @@ import { CustomerOrderSuccessClient } from "@/components/customer/customer-clien
 import { CustomerPageSkeleton } from "@/components/customer/customer-page-state";
 
 export default function OrderSuccessPage() {
-  return <Suspense fallback={<CustomerPageSkeleton rows={3} />}><CustomerOrderSuccessClient /></Suspense>;
+  return <Suspense fallback={<CustomerPageSkeleton variant="detail" rows={3} />}><CustomerOrderSuccessClient /></Suspense>;
 }

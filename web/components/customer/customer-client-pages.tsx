@@ -51,9 +51,9 @@ export function CustomerHomeClient() {
     offers: Offer[];
   }>("/api/customer/home", 30_000);
 
-  if (home.loading) return <CustomerPageSkeleton rows={5} />;
+  if (home.loading) return <CustomerPageSkeleton variant="dashboard" rows={5} />;
   if (home.error) return <CustomerPageError message={home.error} retry={home.retry} />;
-  if (!home.data) return <CustomerPageSkeleton rows={5} />;
+  if (!home.data) return <CustomerPageSkeleton variant="dashboard" rows={5} />;
 
   const address = home.data.addresses.find((item) => item.isDefault) ?? home.data.addresses[0];
   return (
@@ -70,9 +70,9 @@ export function CustomerHomeClient() {
 
 export function CustomerServicesClient() {
   const catalog = useCustomerData<CatalogResponse>("/api/customer/catalog", 300_000);
-  if (catalog.loading) return <CustomerPageSkeleton rows={5} />;
+  if (catalog.loading) return <CustomerPageSkeleton variant="services" rows={5} />;
   if (catalog.error) return <CustomerPageError message={catalog.error} retry={catalog.retry} />;
-  if (!catalog.data) return <CustomerPageSkeleton rows={5} />;
+  if (!catalog.data) return <CustomerPageSkeleton variant="services" rows={5} />;
   return <ServicesListView categories={catalog.data.categories} services={catalog.data.services} offer={catalog.data.offers[0] ?? null} />;
 }
 
@@ -86,14 +86,14 @@ export function CustomerServiceDetailsClient() {
     if (!catalog.loading && catalog.data && !service) router.replace("/customer/services");
   }, [catalog.data, catalog.loading, router, service]);
 
-  if (catalog.loading || (!service && !catalog.error)) return <CustomerPageSkeleton rows={4} />;
+  if (catalog.loading || (!service && !catalog.error)) return <CustomerPageSkeleton variant="detail" rows={4} />;
   if (catalog.error) return <CustomerPageError message={catalog.error} retry={catalog.retry} />;
   return service ? <ServiceDetailsView service={service} /> : null;
 }
 
 export function CustomerOrdersClient() {
   const orders = useCustomerData<OrdersResponse>("/api/customer/orders", 15_000);
-  if (orders.loading) return <CustomerPageSkeleton rows={5} />;
+  if (orders.loading) return <CustomerPageSkeleton variant="list" rows={5} />;
   if (orders.error) return <CustomerPageError message={orders.error} retry={orders.retry} />;
   const display: CustomerOrder[] = (orders.data?.orders ?? []).map((order) => ({
     id: order.id,
@@ -113,28 +113,28 @@ export function CustomerOrdersClient() {
 export function CustomerOrderDetailsClient() {
   const params = useParams<{ id: string }>();
   const order = useCustomerData<{ order: PortalOrder }>(`/api/customer/orders/${encodeURIComponent(params.id)}`, 15_000);
-  if (order.loading) return <CustomerPageSkeleton rows={5} />;
+  if (order.loading) return <CustomerPageSkeleton variant="detail" rows={5} />;
   if (order.error) return <CustomerPageError message={order.error} retry={order.retry} />;
-  return order.data ? <OrderDetailsView order={order.data.order} /> : <CustomerPageSkeleton />;
+  return order.data ? <OrderDetailsView order={order.data.order} /> : <CustomerPageSkeleton variant="detail" />;
 }
 
 export function CustomerWalletClient() {
   const wallet = useCustomerData<WalletResponse>("/api/customer/wallet", 15_000);
-  if (wallet.loading) return <CustomerPageSkeleton rows={5} />;
+  if (wallet.loading) return <CustomerPageSkeleton variant="list" rows={5} />;
   if (wallet.error) return <CustomerPageError message={wallet.error} retry={wallet.retry} />;
-  return wallet.data ? <WalletView balance={wallet.data.wallet.balance} portalTransactions={wallet.data.wallet.transactions} /> : <CustomerPageSkeleton />;
+  return wallet.data ? <WalletView balance={wallet.data.wallet.balance} portalTransactions={wallet.data.wallet.transactions} /> : <CustomerPageSkeleton variant="list" />;
 }
 
 export function CustomerProfileClient() {
   const user = useCustomerData<UserResponse>("/api/auth/me", 60_000);
-  if (user.loading) return <CustomerPageSkeleton rows={6} />;
+  if (user.loading) return <CustomerPageSkeleton variant="form" rows={6} />;
   if (user.error) return <CustomerPageError message={user.error} retry={user.retry} />;
-  return user.data ? <ProfileView user={user.data.user} /> : <CustomerPageSkeleton />;
+  return user.data ? <ProfileView user={user.data.user} /> : <CustomerPageSkeleton variant="form" />;
 }
 
 export function CustomerAddressesClient() {
   const addresses = useCustomerData<AddressesResponse>("/api/customer/addresses", 15_000);
-  if (addresses.loading) return <CustomerPageSkeleton rows={4} />;
+  if (addresses.loading) return <CustomerPageSkeleton variant="list" rows={4} />;
   if (addresses.error) return <CustomerPageError message={addresses.error} retry={addresses.retry} />;
   return <AddressesView addresses={addresses.data?.addresses ?? []} />;
 }
@@ -147,14 +147,14 @@ export function CustomerEditAddressClient() {
   useEffect(() => {
     if (!addresses.loading && addresses.data && !address) router.replace("/customer/addresses");
   }, [address, addresses.data, addresses.loading, router]);
-  if (addresses.loading || (!address && !addresses.error)) return <CustomerPageSkeleton rows={4} />;
+  if (addresses.loading || (!address && !addresses.error)) return <CustomerPageSkeleton variant="form" rows={4} />;
   if (addresses.error) return <CustomerPageError message={addresses.error} retry={addresses.retry} />;
   return address ? <AddAddressView address={address} /> : null;
 }
 
 export function CustomerPaymentClient() {
   const wallet = useCustomerData<WalletResponse>("/api/customer/wallet", 15_000);
-  if (wallet.loading) return <CustomerPageSkeleton rows={4} />;
+  if (wallet.loading) return <CustomerPageSkeleton variant="form" rows={4} />;
   if (wallet.error) return <CustomerPageError message={wallet.error} retry={wallet.retry} />;
   return <PaymentView walletBalance={wallet.data?.wallet.balance ?? 0} />;
 }
@@ -176,7 +176,7 @@ function pickupDates(): PickupDateOption[] {
 export function CustomerScheduleClient() {
   const addresses = useCustomerData<AddressesResponse>("/api/customer/addresses", 15_000);
   const dates = useMemo(pickupDates, []);
-  if (addresses.loading) return <CustomerPageSkeleton rows={4} />;
+  if (addresses.loading) return <CustomerPageSkeleton variant="form" rows={4} />;
   if (addresses.error) return <CustomerPageError message={addresses.error} retry={addresses.retry} />;
   const address = addresses.data?.addresses[0];
   const pickupAddress = address ? [address.fullAddress, address.landmark, address.city, address.pincode].filter(Boolean).join(", ") : "";
@@ -185,7 +185,7 @@ export function CustomerScheduleClient() {
 
 export function CustomerTrackClient() {
   const orders = useCustomerData<OrdersResponse>("/api/customer/orders", 15_000);
-  if (orders.loading) return <CustomerPageSkeleton rows={5} />;
+  if (orders.loading) return <CustomerPageSkeleton variant="list" rows={5} />;
   if (orders.error) return <CustomerPageError message={orders.error} retry={orders.retry} />;
   return <TrackOrderView order={orders.data?.orders[0] ?? null} />;
 }
@@ -198,7 +198,7 @@ export function CustomerOrderSuccessClient() {
   useEffect(() => {
     if (!id) router.replace("/customer/orders");
   }, [id, router]);
-  if (!id || order.loading) return <CustomerPageSkeleton rows={3} />;
+  if (!id || order.loading) return <CustomerPageSkeleton variant="detail" rows={3} />;
   if (order.error) return <CustomerPageError message={order.error} retry={order.retry} />;
-  return order.data ? <OrderSuccessView order={order.data.order} /> : <CustomerPageSkeleton rows={3} />;
+  return order.data ? <OrderSuccessView order={order.data.order} /> : <CustomerPageSkeleton variant="detail" rows={3} />;
 }
