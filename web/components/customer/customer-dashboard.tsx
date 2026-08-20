@@ -168,7 +168,7 @@ export function CustomerDashboard({
 
         {categories.length > 0 ? <section>
           <div className="flex items-center justify-between px-0.5">
-            <h2 className="text-[14px] font-bold">Service Categories</h2>
+            <h2 className="text-[14px] font-bold">Choose a garment</h2>
             <Link
               href="/customer/services"
               className="rounded-md px-2 py-1 text-[11px] font-bold text-[#7d50dd] hover:bg-[#f2edff]"
@@ -178,7 +178,7 @@ export function CustomerDashboard({
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {categories.map((category) => (
+            {categories.slice(0, 8).map((category) => (
               <Link
                 key={category.id}
                 href={`/customer/services?category=${encodeURIComponent(category.id)}`}

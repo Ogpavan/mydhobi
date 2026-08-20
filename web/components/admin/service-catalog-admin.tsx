@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { GARMENT_AUDIENCES } from "@/lib/garment-audience";
 import type { CatalogService, CatalogVariant, ServiceCategory } from "@/lib/service-catalog";
 
 const selectClassName = "h-9 w-full rounded border border-[#DCE6F2] bg-white px-3 text-[12px]";
@@ -93,6 +94,7 @@ function AddCategoryDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: values.get("name"),
+          audience: values.get("audience"),
           ...(category ? {} : { imagePath: imagePath ?? "" }),
           ...(category && imagePath ? { imagePath } : {}),
           displayOrder: Number(values.get("displayOrder")),
@@ -101,15 +103,15 @@ function AddCategoryDialog({
       );
       const data = (await response.json()) as { category?: ServiceCategory; message?: string };
       if (!response.ok || !data.category) {
-        toast.error(data.message ?? `Unable to ${category ? "update" : "create"} category`);
+        toast.error(data.message ?? `Unable to ${category ? "update" : "create"} garment`);
         return;
       }
       onCreated(data.category);
       form.reset();
       onOpenChange(false);
-      toast.success(category ? "Category updated" : "Category created");
+      toast.success(category ? "Garment updated" : "Garment created");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Unable to ${category ? "update" : "create"} category`);
+      toast.error(error instanceof Error ? error.message : `Unable to ${category ? "update" : "create"} garment`);
     } finally {
       setSaving(false);
     }
@@ -119,12 +121,20 @@ function AddCategoryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{category ? "Edit Category" : "Add Category"}</DialogTitle>
+          <DialogTitle>{category ? "Edit Garment" : "Add Garment"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={save} className="grid gap-3 p-4">
           <label className="text-[12px] font-medium text-[#31405A]">
-            Category name
+            Garment name
             <Input name="name" required maxLength={80} defaultValue={category?.name ?? ""} className="mt-1.5" />
+          </label>
+          <label className="text-[12px] font-medium text-[#31405A]">
+            Group
+            <select name="audience" defaultValue={category?.audience ?? "other"} className={`${selectClassName} mt-1.5`}>
+              {GARMENT_AUDIENCES.map((audience) => (
+                <option key={audience} value={audience}>{audience === "kid" ? "Kid" : audience[0]!.toUpperCase() + audience.slice(1)}</option>
+              ))}
+            </select>
           </label>
           <ImageField />
           <label className="text-[12px] font-medium text-[#31405A]">
@@ -133,7 +143,7 @@ function AddCategoryDialog({
           </label>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button disabled={saving} className="bg-[#075DFF]">{saving ? "Saving..." : category ? "Save" : "Add Category"}</Button>
+            <Button disabled={saving} className="bg-[#075DFF]">{saving ? "Saving..." : category ? "Save" : "Add Garment"}</Button>
           </div>
         </form>
       </DialogContent>
@@ -152,12 +162,12 @@ function CatalogActions({
     <div className="flex flex-wrap justify-end gap-2">
       <Button variant="outline" onClick={onAddCategory}>
         <Plus />
-        Add Category
+        Add Garment
       </Button>
       {onAddService ? (
         <Button className="bg-[#075DFF]" onClick={onAddService}>
           <Plus />
-          Add Service
+          Add Garment Service
         </Button>
       ) : null}
     </div>
@@ -199,7 +209,6 @@ function AddServiceDialog({
         body: JSON.stringify({
           categoryId: values.get("categoryId"),
           name: values.get("name"),
-          variantName: values.get("variantName"),
           ...(service ? {} : { imagePath: imagePath ?? "" }),
           ...(service && imagePath ? { imagePath } : {}),
           unit: values.get("unit"),
@@ -230,11 +239,11 @@ function AddServiceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[620px]">
         <DialogHeader>
-          <DialogTitle>{service ? "Edit Service" : "Add Service"}</DialogTitle>
+          <DialogTitle>{service ? "Edit Garment Service" : "Add Garment Service"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={save} className="grid max-h-[75vh] gap-3 overflow-y-auto p-4 sm:grid-cols-2">
           <label className="text-[12px] font-medium text-[#31405A]">
-            Category
+            Garment
             <select name="categoryId" required defaultValue={service?.categoryId ?? ""} className={`${selectClassName} mt-1.5`}>
               <option value="">Select category</option>
               {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
@@ -245,10 +254,6 @@ function AddServiceDialog({
             <Input name="name" required maxLength={100} defaultValue={service?.name ?? ""} className="mt-1.5" />
           </label>
           <ImageField />
-          <label className="text-[12px] font-medium text-[#31405A]">
-            Variant name
-            <Input name="variantName" required defaultValue={service?.variants[0]?.name ?? "Standard"} maxLength={100} className="mt-1.5" />
-          </label>
           <label className="text-[12px] font-medium text-[#31405A]">
             Unit
             <select name="unit" defaultValue={service?.unit ?? "piece"} className={`${selectClassName} mt-1.5`}>
@@ -387,16 +392,16 @@ export function ServiceCategoriesAdmin({ initialCategories }: { initialCategorie
   }
 
   async function removeCategory(category: ServiceCategory) {
-    if (!window.confirm(`Delete ${category.name}? All services in this category will also be deleted.`)) return;
+    if (!window.confirm(`Delete ${category.name}? All services for this garment will also be deleted.`)) return;
 
     const response = await fetch(`/api/admin/service-categories/${category.id}`, { method: "DELETE" });
     const data = (await response.json()) as { message?: string };
     if (!response.ok) {
-      toast.error(data.message ?? "Unable to delete category");
+      toast.error(data.message ?? "Unable to delete garment");
       return;
     }
     setCategories((current) => current.filter((item) => item.id !== category.id));
-    toast.success("Category and its services deleted");
+    toast.success("Garment and its services deleted");
   }
 
   return (
@@ -405,20 +410,21 @@ export function ServiceCategoriesAdmin({ initialCategories }: { initialCategorie
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Image</TableHead><TableHead>Category</TableHead><TableHead>Mobile Order</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Image</TableHead><TableHead>Garment</TableHead><TableHead>Group</TableHead><TableHead>Mobile Order</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
               {categories.length ? categories.map((category) => (
                 <TableRow key={category.id}>
                   <TableCell><CatalogImage path={category.imagePath} name={category.name} /></TableCell>
                   <TableCell><p className="font-medium">{category.name}</p><p className="mt-1 text-[11px] text-[#52627A]">{category.slug}</p></TableCell>
+                  <TableCell className="capitalize">{category.audience}</TableCell>
                   <TableCell>{category.displayOrder}</TableCell>
                   <TableCell><div className="flex items-center gap-2"><Switch checked={category.isActive} onCheckedChange={() => toggle(category)} /><span className="text-[12px]">{category.isActive ? "Shown" : "Hidden"}</span></div></TableCell>
                   <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" aria-label={`Edit ${category.name}`} title="Edit category" onClick={() => openEditCategory(category)}><Pencil /></Button>
-                    <Button size="icon" variant="ghost" className="text-red-600" aria-label={`Delete ${category.name}`} title="Delete category" onClick={() => void removeCategory(category)}><Trash2 /></Button>
+                    <Button size="icon" variant="ghost" aria-label={`Edit ${category.name}`} title="Edit garment" onClick={() => openEditCategory(category)}><Pencil /></Button>
+                    <Button size="icon" variant="ghost" className="text-red-600" aria-label={`Delete ${category.name}`} title="Delete garment" onClick={() => void removeCategory(category)}><Trash2 /></Button>
                   </TableCell>
                 </TableRow>
-              )) : <TableRow><TableCell colSpan={5} className="h-24 text-center text-[#52627A]">No categories found</TableCell></TableRow>}
+              )) : <TableRow><TableCell colSpan={6} className="h-24 text-center text-[#52627A]">No garments found</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -496,7 +502,7 @@ export function CatalogServicesAdmin({ initialCategories, initialServices }: { i
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Service</TableHead><TableHead>Category</TableHead><TableHead>Unit</TableHead><TableHead>Price</TableHead><TableHead>Turnaround</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Service</TableHead><TableHead>Garment</TableHead><TableHead>Unit</TableHead><TableHead>Price</TableHead><TableHead>Turnaround</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
               {services.length ? services.map((service) => (
                 <TableRow key={service.id}>

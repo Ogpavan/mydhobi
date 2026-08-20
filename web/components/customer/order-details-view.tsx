@@ -118,9 +118,9 @@ export function OrderDetailsView({ order }: { order: PortalOrder }) {
         <section className="rounded-[12px] border border-[#e4e1ea] bg-white px-3 py-3">
           <h2 className="text-[11px] font-bold">Order Items</h2>
           <div className="mt-3 space-y-3">
-            {order.items.map((item) => (
-              <div key={item.name} className="grid grid-cols-[1fr_auto_auto] gap-4 text-[10px]">
-                <span>{item.name}</span>
+            {order.items.map((item, index) => (
+              <div key={`${item.name}-${index}`} className="grid grid-cols-[1fr_auto_auto] gap-4 text-[10px]">
+                <span><span className="block">{item.name}</span>{[item.alias, item.packingType, item.brand, item.fabric, item.defect && item.defect !== "None" ? item.defect : ""].filter(Boolean).length ? <span className="mt-1 block text-[9px] text-[#8a8898]">{[item.alias, item.packingType, item.brand, item.fabric, item.defect && item.defect !== "None" ? item.defect : ""].filter(Boolean).join(" · ")}</span> : null}</span>
                 <span className="text-[#77798a]">
                   {item.quantity} × ₹{item.unitPrice}
                 </span>

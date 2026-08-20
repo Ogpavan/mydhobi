@@ -5,7 +5,7 @@ export const SIDEBAR_ITEM_DEFINITIONS = [
   { key: "customers", defaultLabel: "Customers" },
   { key: "pickups", defaultLabel: "Pickups" },
   { key: "deliveries", defaultLabel: "Deliveries" },
-  { key: "services", defaultLabel: "Services" },
+  { key: "services", defaultLabel: "Items" },
   { key: "inventory", defaultLabel: "Inventory" },
   { key: "riders", defaultLabel: "Riders" },
   { key: "payments", defaultLabel: "Payments" },

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { deleteServiceCategory, updateServiceCategory } from "@/lib/service-catalog";
+import { deleteServiceCategory, GARMENT_AUDIENCES, updateServiceCategory, type GarmentAudience } from "@/lib/service-catalog";
 import { getCurrentUser } from "@/lib/session";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,6 +11,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const category = await updateServiceCategory(id, {
     ...(typeof body.name === "string" && body.name.trim() ? { name: body.name.trim().slice(0, 80) } : {}),
     ...(typeof body.imagePath === "string" ? { imagePath: body.imagePath.trim().slice(0, 250) } : {}),
+    ...(GARMENT_AUDIENCES.includes(body.audience as GarmentAudience) ? { audience: body.audience as GarmentAudience } : {}),
     ...(Number.isInteger(Number(body.displayOrder)) ? { displayOrder: Number(body.displayOrder) } : {}),
     ...(typeof body.isActive === "boolean" ? { isActive: body.isActive } : {}),
   });

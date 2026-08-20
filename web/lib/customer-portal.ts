@@ -10,6 +10,7 @@ import {
   getPendingReferralDiscount,
   rewardReferral,
 } from "@/lib/referrals";
+import { getCustomerItemPrice } from "@/lib/item-master";
 
 export { orderStatuses };
 export type { PortalOrderStatus };
@@ -28,6 +29,15 @@ export type PortalOrderItem = {
   name: string;
   quantity: number;
   unitPrice: number;
+  garmentId?: string;
+  garmentName?: string;
+  serviceId?: string;
+  serviceName?: string;
+  alias?: string;
+  packingType?: string;
+  brand?: string;
+  fabric?: string;
+  defect?: string;
 };
 
 export type PortalOrderEvent = {
@@ -113,9 +123,27 @@ export function ensureCustomerPortalSchema() {
         item_name VARCHAR(100) NOT NULL,
         quantity INTEGER NOT NULL,
         unit_price NUMERIC(12,2) NOT NULL,
+        garment_id BIGINT,
+        garment_name VARCHAR(100),
+        service_id BIGINT,
+        service_name VARCHAR(100),
+        alias VARCHAR(120) NOT NULL DEFAULT '',
+        packing_type VARCHAR(40) NOT NULL DEFAULT '',
+        brand VARCHAR(80) NOT NULL DEFAULT '',
+        fabric VARCHAR(40) NOT NULL DEFAULT '',
+        defect VARCHAR(80) NOT NULL DEFAULT '',
         CONSTRAINT customer_order_items_quantity_positive CHECK (quantity > 0),
         CONSTRAINT customer_order_items_price_positive CHECK (unit_price >= 0)
       );
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS garment_id BIGINT;
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS garment_name VARCHAR(100);
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS service_id BIGINT;
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS service_name VARCHAR(100);
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS alias VARCHAR(120) NOT NULL DEFAULT '';
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS packing_type VARCHAR(40) NOT NULL DEFAULT '';
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS brand VARCHAR(80) NOT NULL DEFAULT '';
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS fabric VARCHAR(40) NOT NULL DEFAULT '';
+      ALTER TABLE customer_order_items ADD COLUMN IF NOT EXISTS defect VARCHAR(80) NOT NULL DEFAULT '';
 
       CREATE TABLE IF NOT EXISTS customer_order_status_history (
         id BIGSERIAL PRIMARY KEY,
@@ -363,7 +391,8 @@ function mapOrder(
 async function orderItems(orderIds: string[]) {
   if (!orderIds.length) return new Map<string, PortalOrderItem[]>();
   const { rows } = await pool.query(
-    `SELECT order_id, item_name, quantity, unit_price
+    `SELECT order_id, item_name, quantity, unit_price, garment_id, garment_name,
+       service_id, service_name, alias, packing_type, brand, fabric, defect
      FROM customer_order_items WHERE order_id = ANY($1::varchar[]) ORDER BY id`,
     [orderIds],
   );
@@ -372,7 +401,20 @@ async function orderItems(orderIds: string[]) {
     const id = String(row.order_id);
     grouped.set(id, [
       ...(grouped.get(id) ?? []),
-      { name: String(row.item_name), quantity: Number(row.quantity), unitPrice: Number(row.unit_price) },
+      {
+        name: String(row.item_name),
+        quantity: Number(row.quantity),
+        unitPrice: Number(row.unit_price),
+        ...(row.garment_id === null ? {} : { garmentId: String(row.garment_id) }),
+        ...(row.garment_name ? { garmentName: String(row.garment_name) } : {}),
+        ...(row.service_id === null ? {} : { serviceId: String(row.service_id) }),
+        ...(row.service_name ? { serviceName: String(row.service_name) } : {}),
+        ...(row.alias ? { alias: String(row.alias) } : {}),
+        ...(row.packing_type ? { packingType: String(row.packing_type) } : {}),
+        ...(row.brand ? { brand: String(row.brand) } : {}),
+        ...(row.fabric ? { fabric: String(row.fabric) } : {}),
+        ...(row.defect ? { defect: String(row.defect) } : {}),
+      },
     ]);
   }
   return grouped;
@@ -449,8 +491,20 @@ export async function createPortalOrder(
   },
 ) {
   await ensureCustomerPortalSchema();
-  const itemCount = input.items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const storeResult = await pool.query<{ id: string }>(
+    `SELECT id FROM stores WHERE status='active' ORDER BY store_number ASC LIMIT 1`,
+  );
+  const storeId = storeResult.rows[0]?.id ?? null;
+  const pricedItems = await Promise.all(input.items.map(async (item) => {
+    const garmentId = Number(item.garmentId);
+    const serviceId = Number(item.serviceId);
+    if (!item.garmentId || !item.serviceId || !Number.isInteger(garmentId) || !Number.isInteger(serviceId)) return item;
+    const pricing = await getCustomerItemPrice(garmentId, serviceId, storeId);
+    if (!pricing) throw new Error("ITEM_SERVICE_PRICE_NOT_FOUND");
+    return { ...item, unitPrice: pricing.price };
+  }));
+  const itemCount = pricedItems.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = pricedItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const coupon = input.couponCode
     ? await validateOffer(input.couponCode, subtotal)
     : null;
@@ -463,10 +517,6 @@ export async function createPortalOrder(
   const useReferral = referralDiscount >= couponDiscount && referral !== null;
   const discount = Math.max(referralDiscount, couponDiscount);
   const amount = subtotal - discount;
-  const storeResult = await pool.query<{ id: string }>(
-    `SELECT id FROM stores WHERE status='active' ORDER BY store_number ASC LIMIT 1`,
-  );
-  const storeId = storeResult.rows[0]?.id ?? null;
   const id = `ORD${randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
   const paymentStatus =
     input.paymentMethod === "cash" ? "Pending" : "Paid";
@@ -505,11 +555,18 @@ export async function createPortalOrder(
     if (useReferral && referral) {
       await rewardReferral(client, referral.referralId);
     }
-    for (const item of input.items) {
+    for (const item of pricedItems) {
       await client.query(
-        `INSERT INTO customer_order_items (order_id,item_name,quantity,unit_price)
-         VALUES ($1,$2,$3,$4)`,
-        [id, item.name, item.quantity, item.unitPrice],
+        `INSERT INTO customer_order_items
+         (order_id,item_name,quantity,unit_price,garment_id,garment_name,service_id,service_name,alias,packing_type,brand,fabric,defect)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          id, item.name, item.quantity, item.unitPrice,
+          item.garmentId ?? null, item.garmentName ?? null,
+          item.serviceId ?? null, item.serviceName ?? null,
+          item.alias ?? "", item.packingType ?? "", item.brand ?? "",
+          item.fabric ?? "", item.defect ?? "",
+        ],
       );
     }
     await client.query(
@@ -536,7 +593,7 @@ export async function createPortalOrder(
       [userId, `Your order #${id} has been confirmed.`],
     );
     await client.query("COMMIT");
-    return mapOrder(rows[0], input.items, [
+    return mapOrder(rows[0], pricedItems, [
       {
         status: "New",
         note: "Order placed",

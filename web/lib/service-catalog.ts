@@ -1,13 +1,22 @@
 import { pool } from "@/lib/db";
+import { GARMENT_AUDIENCES, type GarmentAudience } from "@/lib/garment-audience";
+
+export { GARMENT_AUDIENCES } from "@/lib/garment-audience";
+export type { GarmentAudience } from "@/lib/garment-audience";
 
 export type ServiceCategory = {
   id: string;
   name: string;
   slug: string;
   imagePath: string;
+  audience: GarmentAudience;
   displayOrder: number;
   isActive: boolean;
 };
+
+// Kept as an alias while the existing admin API routes are migrated. In the
+// customer flow, a category is now a garment (for example, Blazer or Cap).
+export type GarmentCategory = ServiceCategory;
 
 export const CATALOG_UNITS = ["piece", "kg", "pair", "seat", "sq_ft", "set", "fixed"] as const;
 export type CatalogUnit = (typeof CATALOG_UNITS)[number];
@@ -27,6 +36,9 @@ export type CatalogService = {
   id: string;
   categoryId: string;
   categoryName: string;
+  garmentId: string;
+  garmentName: string;
+  garmentImagePath: string;
   name: string;
   slug: string;
   imagePath: string;
@@ -49,11 +61,16 @@ export function ensureServiceCatalogSchema() {
         name VARCHAR(80) NOT NULL,
         slug VARCHAR(90) NOT NULL UNIQUE,
         image_path VARCHAR(250) NOT NULL DEFAULT '',
+        audience VARCHAR(20) NOT NULL DEFAULT 'other',
         display_order INTEGER NOT NULL DEFAULT 0,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+      ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS audience VARCHAR(20) NOT NULL DEFAULT 'other';
+      UPDATE service_categories SET audience='other' WHERE audience IS NULL OR audience NOT IN ('men','women','kid','other');
+      ALTER TABLE service_categories DROP CONSTRAINT IF EXISTS service_categories_audience;
+      ALTER TABLE service_categories ADD CONSTRAINT service_categories_audience CHECK (audience IN ('men','women','kid','other'));
       CREATE TABLE IF NOT EXISTS catalog_services (
         id BIGSERIAL PRIMARY KEY,
         category_id BIGINT NOT NULL REFERENCES service_categories(id) ON DELETE RESTRICT,
@@ -130,6 +147,9 @@ function mapCategory(row: Record<string, unknown>): ServiceCategory {
     name: String(row.name),
     slug: String(row.slug),
     imagePath: String(row.image_path),
+    audience: GARMENT_AUDIENCES.includes(row.audience as GarmentAudience)
+      ? row.audience as GarmentAudience
+      : "other",
     displayOrder: Number(row.display_order),
     isActive: Boolean(row.is_active),
   };
@@ -158,6 +178,9 @@ function mapService(row: Record<string, unknown>, variants: CatalogVariant[] = [
     id: String(row.id),
     categoryId: String(row.category_id),
     categoryName: String(row.category_name),
+    garmentId: String(row.category_id),
+    garmentName: String(row.category_name),
+    garmentImagePath: String(row.category_image_path ?? ""),
     name: String(row.name),
     slug: String(row.slug),
     imagePath: String(row.image_path),
@@ -174,7 +197,7 @@ function mapService(row: Record<string, unknown>, variants: CatalogVariant[] = [
 export async function listServiceCategories(includeInactive = true) {
   await ensureServiceCatalogSchema();
   const { rows } = await pool.query(
-    `SELECT id,name,slug,image_path,display_order,is_active
+    `SELECT id,name,slug,image_path,audience,display_order,is_active
      FROM service_categories
      ${includeInactive ? "" : "WHERE is_active=TRUE"}
      ORDER BY display_order,name`,
@@ -185,14 +208,15 @@ export async function listServiceCategories(includeInactive = true) {
 export async function createServiceCategory(input: {
   name: string;
   imagePath: string;
+  audience: GarmentAudience;
   displayOrder: number;
 }) {
   await ensureServiceCatalogSchema();
   const { rows } = await pool.query(
-    `INSERT INTO service_categories (name,slug,image_path,display_order)
-     VALUES ($1,$2,$3,$4)
-     RETURNING id,name,slug,image_path,display_order,is_active`,
-    [input.name, slugifyCatalogName(input.name), input.imagePath, input.displayOrder],
+    `INSERT INTO service_categories (name,slug,image_path,audience,display_order)
+     VALUES ($1,$2,$3,$4,$5)
+     RETURNING id,name,slug,image_path,audience,display_order,is_active`,
+    [input.name, slugifyCatalogName(input.name), input.imagePath, input.audience, input.displayOrder],
   );
   return mapCategory(rows[0]);
 }
@@ -223,7 +247,7 @@ export async function getServiceCatalogImage(id: string) {
 
 export async function updateServiceCategory(
   id: string,
-  input: Partial<Pick<ServiceCategory, "name" | "imagePath" | "displayOrder" | "isActive">>,
+  input: Partial<Pick<ServiceCategory, "name" | "imagePath" | "audience" | "displayOrder" | "isActive">>,
 ) {
   await ensureServiceCatalogSchema();
   const current = await pool.query("SELECT * FROM service_categories WHERE id=$1", [id]);
@@ -231,9 +255,9 @@ export async function updateServiceCategory(
   const row = current.rows[0];
   const name = input.name ?? String(row.name);
   const { rows } = await pool.query(
-    `UPDATE service_categories SET name=$2,slug=$3,image_path=$4,display_order=$5,is_active=$6,updated_at=NOW()
-     WHERE id=$1 RETURNING id,name,slug,image_path,display_order,is_active`,
-    [id, name, slugifyCatalogName(name), input.imagePath ?? row.image_path, input.displayOrder ?? row.display_order, input.isActive ?? row.is_active],
+    `UPDATE service_categories SET name=$2,slug=$3,image_path=$4,audience=$5,display_order=$6,is_active=$7,updated_at=NOW()
+     WHERE id=$1 RETURNING id,name,slug,image_path,audience,display_order,is_active`,
+    [id, name, slugifyCatalogName(name), input.imagePath ?? row.image_path, input.audience ?? row.audience ?? "other", input.displayOrder ?? row.display_order, input.isActive ?? row.is_active],
   );
   return mapCategory(rows[0]);
 }
@@ -272,7 +296,7 @@ export async function deleteCatalogService(id: string) {
 }
 
 const serviceSelect = `
-  services.id,services.category_id,categories.name AS category_name,
+  services.id,services.category_id,categories.name AS category_name,categories.image_path AS category_image_path,
   services.name,services.slug,services.image_path,services.unit,
   services.regular_price,services.express_price,services.turnaround,
   services.display_order,services.is_active

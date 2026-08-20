@@ -35,13 +35,14 @@ import { cn } from "@/lib/utils";
 export function ServiceDetailsView({ service }: { service: CatalogService }) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [cartHydrated, setCartHydrated] = useState(false);
-  const [itemTab,setItemTab]=useState<"Popular"|"All">("Popular");
   const router = useRouter();
-  const cartImage = service.imagePath || "/wash_fold.png";
+  const cartImage = service.imagePath || service.garmentImagePath || "/wash_fold.png";
   const pricedItems = service.variants
     .filter((variant) => variant.isActive)
     .map((variant) => ({
-      name: variant.name === "Standard" ? service.name : variant.name,
+      name: variant.name === "Standard"
+        ? `${service.garmentName} · ${service.name}`
+        : `${service.garmentName} · ${service.name} · ${variant.name}`,
       price: variant.regularPrice,
       unit: variant.unit,
       image: cartImage,
@@ -90,7 +91,7 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
     ];
     const hasMultipleServices = otherServiceItems.length > 0;
     writeCustomerCart(nextItems.length ? {
-      service: hasMultipleServices ? "Multiple Services" : service.name,
+      service: hasMultipleServices ? "Multiple Garments" : `${service.garmentName} · ${service.name}`,
       serviceSlug: hasMultipleServices ? "" : service.slug,
       items: nextItems,
     } : null);
@@ -110,7 +111,7 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
   return (
     <div className="min-h-screen bg-[#fafafe] pb-24 text-[#17182c]">
       <CustomerSimpleHeader
-        title="Service Details"
+        title="Choose Service"
         backHref="/customer/services"
         action={
           <Link href="/customer/cart" aria-label="View cart" className="relative flex h-9 w-9 items-center justify-center rounded-full hover:bg-[#f4f1fb]">
@@ -122,28 +123,25 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
       <main className="mx-auto max-w-[720px] px-4 py-4">
         <section className="relative flex min-h-[116px] overflow-hidden rounded-[12px] bg-[linear-gradient(110deg,#f5f1ff,#ece5ff)] px-4 py-4">
           <div className="max-w-[62%]">
-            <h2 className="text-[14px] font-bold">{service.name}</h2>
-            <p className="mt-3 text-[20px] font-bold">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7440dc]">{service.name}</p>
+            <h2 className="mt-2 text-[18px] font-bold">{service.garmentName}</h2>
+            <p className="mt-2 text-[12px] text-[#656779]">
               ₹{service.regularPrice}/{service.unit}
             </p>
           </div>
-          <Image src={service.imagePath || "/wash_fold.png"} alt="" width={110} height={105} className="absolute bottom-0 right-3 h-[105px] w-[110px] object-contain" />
+          <Image src={cartImage} alt="" width={110} height={105} className="absolute bottom-0 right-3 h-[105px] w-[110px] object-contain" />
         </section>
 
-        <div className="mt-4 grid grid-cols-2 border-b border-[#dfdbe7]">
-          <button type="button" onClick={()=>setItemTab("Popular")} className={cn("border-b-2 py-3 text-[10px] font-bold",itemTab==="Popular"?"border-[#7440dc] text-[#7440dc]":"border-transparent text-[#858796]")}>Popular Items</button>
-          <button type="button" onClick={()=>setItemTab("All")} className={cn("border-b-2 py-3 text-[10px] font-bold",itemTab==="All"?"border-[#7440dc] text-[#7440dc]":"border-transparent text-[#858796]")}>All Items</button>
-        </div>
-
-        <section className="mt-2 space-y-2">
-          {(itemTab==="Popular"?pricedItems.slice(0,2):pricedItems).map((item) => {
+        <section className="mt-5 space-y-2">
+          <h2 className="text-[12px] font-bold">Add {service.garmentName}</h2>
+          {pricedItems.map((item) => {
             const count = counts[item.name] ?? 0;
             return (
               <div key={item.name} className="flex items-center gap-3 rounded-[12px] border border-[#e5e2eb] bg-white px-3 py-2">
                 <Image src={item.image || "/wash_fold.png"} alt="" width={46} height={46} className="h-[46px] w-[46px] object-contain" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold">{item.name}</p>
-                      <p className="mt-1 text-[9px] text-[#77798a]">₹{item.price}/{item.unit.replace("_", " ")}</p>
+                  <p className="text-[11px] font-bold">{service.name}{item.name.endsWith(` · ${service.name}`) ? "" : ` · ${item.name.split(" · ").slice(-1)[0]}`}</p>
+                  <p className="mt-1 text-[9px] text-[#77798a]">₹{item.price}/{item.unit.replace("_", " ")}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button type="button" aria-label={`Remove ${item.name}`} onClick={() => { const next = { ...counts, [item.name]: Math.max(0, count - 1) }; setCounts(next); saveSelection(next); }} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f1eaff] text-[#7440dc]"><Minus className="h-3.5 w-3.5" /></button>
@@ -173,9 +171,9 @@ export function CartView() {
   const [loaded,setLoaded]=useState(false);
   useEffect(()=>{setCart(readCustomerCart());setLoaded(true);const saved=Number(localStorage.getItem("mydhobi_discount")??0);if(Number.isFinite(saved))setDiscount(saved);setCoupon(localStorage.getItem("mydhobi_coupon")??"");},[]);
   const subtotal=cartSubtotal(cart);
-  function updateQuantity(name:string,quantity:number){
+  function updateQuantity(index:number,quantity:number){
     if(!cart)return;
-    const next={...cart,items:cart.items.flatMap(item=>item.name===name?(quantity>0?[{...item,quantity}]:[]):[item])};
+    const next={...cart,items:cart.items.flatMap((item,itemIndex)=>itemIndex===index?(quantity>0?[{...item,quantity}]:[]):[item])};
     const value=next.items.length?next:null;setCart(value);writeCustomerCart(value);
     setDiscount(0);setCoupon("");localStorage.removeItem("mydhobi_coupon");localStorage.removeItem("mydhobi_discount");
   }
@@ -193,14 +191,14 @@ export function CartView() {
       <CustomerSimpleHeader title="My Cart" backHref={cart?.serviceSlug ? `/customer/services/${cart.serviceSlug}` : "/customer/services"} />
       <main className="mx-auto max-w-[720px] space-y-3 px-4 py-4">
         {loaded&&!cart?<p className="rounded-[12px] border border-dashed border-[#d8d4e2] bg-white px-4 py-12 text-center text-[11px] text-[#77798a]">Your cart is empty</p>:null}
-        {cart?.items.map(item => (
-          <div key={item.name} className="flex items-center gap-3 rounded-[12px] border border-[#e5e2eb] bg-white px-3 py-3">
+        {cart?.items.map((item, index) => (
+          <div key={`${item.name}-${index}`} className="flex items-center gap-3 rounded-[12px] border border-[#e5e2eb] bg-white px-3 py-3">
             <Image src={item.image || "/wash_fold.png"} alt="" width={44} height={44} className="h-11 w-11 object-contain" />
-            <div className="min-w-0 flex-1"><p className="text-[11px] font-bold">{item.name}</p><p className="mt-1 text-[9px] text-[#77798a]">₹{item.unitPrice} × {item.quantity}</p></div>
-            <div className="flex items-center gap-2"><button type="button" onClick={()=>updateQuantity(item.name,item.quantity-1)} aria-label={`Remove one ${item.name}`} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f1eaff] text-[#7440dc]"><Minus className="h-3.5 w-3.5" /></button><b className="w-4 text-center text-[11px]">{item.quantity}</b><button type="button" onClick={()=>updateQuantity(item.name,item.quantity+1)} aria-label={`Add one ${item.name}`} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#7440dc] text-white"><Plus className="h-3.5 w-3.5" /></button><button type="button" onClick={()=>updateQuantity(item.name,0)} aria-label={`Remove ${item.name}`} className="ml-1 text-[#df4651]"><Trash2 className="h-4 w-4" /></button></div>
+            <div className="min-w-0 flex-1"><p className="text-[11px] font-bold">{item.name}</p><p className="mt-1 text-[9px] text-[#77798a]">₹{item.unitPrice} × {item.quantity}</p>{[item.alias, item.packingType, item.brand, item.fabric, item.defect && item.defect !== "None" ? item.defect : ""].filter(Boolean).length ? <p className="mt-1 truncate text-[9px] text-[#8a8898]">{[item.alias, item.packingType, item.brand, item.fabric, item.defect && item.defect !== "None" ? item.defect : ""].filter(Boolean).join(" · ")}</p> : null}</div>
+            <div className="flex items-center gap-2"><button type="button" onClick={()=>updateQuantity(index,item.quantity-1)} aria-label={`Remove one ${item.name}`} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f1eaff] text-[#7440dc]"><Minus className="h-3.5 w-3.5" /></button><b className="w-4 text-center text-[11px]">{item.quantity}</b><button type="button" onClick={()=>updateQuantity(index,item.quantity+1)} aria-label={`Add one ${item.name}`} className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#7440dc] text-white"><Plus className="h-3.5 w-3.5" /></button><button type="button" onClick={()=>updateQuantity(index,0)} aria-label={`Remove ${item.name}`} className="ml-1 text-[#df4651]"><Trash2 className="h-4 w-4" /></button></div>
           </div>
         ))}
-        <Link href="/customer/services" className="flex h-10 items-center justify-center gap-1 rounded-[10px] border border-[#8a50ee] text-[10px] font-bold text-[#7440dc]"><Plus className="h-3.5 w-3.5" /> Add More Items</Link>
+        <Link href="/customer/services" className="flex h-10 items-center justify-center gap-1 rounded-[10px] border border-[#8a50ee] text-[10px] font-bold text-[#7440dc]"><Plus className="h-3.5 w-3.5" /> Add More Garments</Link>
         <section className="rounded-[12px] border border-[#e5e2eb] bg-white p-3">
           <h2 className="text-[11px] font-bold">Apply Coupon</h2>
           <div className="mt-2 flex gap-2"><input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="Enter coupon code" className="h-10 min-w-0 flex-1 rounded-[9px] border border-[#e1deea] px-3 text-[10px] outline-none focus:border-[#8a50ee]" /><button type="button" disabled={applying} onClick={applyCoupon} className="rounded-[9px] border border-[#8a50ee] px-4 text-[10px] font-bold text-[#7440dc] disabled:opacity-60">{applying?"Checking...":"Apply"}</button></div>
@@ -210,7 +208,7 @@ export function CartView() {
           <dl className="mt-3 grid grid-cols-[1fr_auto] gap-y-2 text-[10px]"><dt className="text-[#77798a]">Item Total</dt><dd>₹{subtotal}</dd><dt className="text-[#77798a]">Pickup Charges</dt><dd className="text-[#23a84f]">FREE</dd>{discount>0?<><dt className="text-[#77798a]">Coupon Discount</dt><dd className="text-[#23a84f]">-₹{discount}</dd></>:null}<dt className="border-t pt-3 font-bold">Total Amount</dt><dd className="border-t pt-3 font-bold">₹{subtotal-discount}</dd></dl>
         </section>
       </main>
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e8e5ed] bg-white p-3">{cart?<Link href="/customer/addresses" className="mx-auto flex h-12 max-w-[720px] items-center justify-center rounded-[12px] bg-[#7440dc] text-[12px] font-bold text-white">Proceed to Checkout</Link>:<Link href="/customer/services" className="mx-auto flex h-12 max-w-[720px] items-center justify-center rounded-[12px] bg-[#7440dc] text-[12px] font-bold text-white">Choose a Service</Link>}</div>
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e8e5ed] bg-white p-3">{cart?<Link href="/customer/addresses" className="mx-auto flex h-12 max-w-[720px] items-center justify-center rounded-[12px] bg-[#7440dc] text-[12px] font-bold text-white">Proceed to Checkout</Link>:<Link href="/customer/services" className="mx-auto flex h-12 max-w-[720px] items-center justify-center rounded-[12px] bg-[#7440dc] text-[12px] font-bold text-white">Choose a Garment</Link>}</div>
     </div>
   );
 }
@@ -314,7 +312,20 @@ export function PaymentView({ walletBalance }: { walletBalance: number }) {
         address: checkoutAddress,
         instructions: localStorage.getItem("mydhobi_pickup_instructions") ?? "",
         couponCode: localStorage.getItem("mydhobi_coupon") ?? "",
-        items: cart.items.map(({name,quantity,unitPrice})=>({name,quantity,unitPrice})),
+        items: cart.items.map((item)=>({
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          garmentId: item.garmentId,
+          garmentName: item.garmentName,
+          serviceId: item.serviceId,
+          serviceName: item.serviceName,
+          alias: item.alias,
+          packingType: item.packingType,
+          brand: item.brand,
+          fabric: item.fabric,
+          defect: item.defect,
+        })),
       }),
     });
     const data = await response.json() as { order?: { id: string }; message?: string };

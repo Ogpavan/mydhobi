@@ -3,9 +3,22 @@ export type CustomerCartItem = {
   quantity: number;
   unitPrice: number;
   image: string;
+  garmentId?: string;
+  garmentName?: string;
+  serviceId?: string;
+  serviceName?: string;
+  alias?: string;
+  packingType?: string;
+  brand?: string;
+  fabric?: string;
+  defect?: string;
   service?: string;
   serviceSlug?: string;
 };
+
+export const PACKING_TYPES = ["Bag", "Hanger", "Box", "Other"] as const;
+export const FABRIC_TYPES = ["Cotton", "Silk", "Wool", "Synthetic", "Linen", "Other"] as const;
+export const DEFECT_TYPES = ["None", "Stain", "Tear", "Missing button", "Color issue", "Other"] as const;
 
 export type CustomerCart = {
   service: string;
@@ -34,7 +47,12 @@ export function readCustomerCart(): CustomerCart | null {
         Number.isInteger(item.quantity) &&
         item.quantity > 0 &&
         Number.isFinite(item.unitPrice) &&
-        item.unitPrice >= 0,
+        item.unitPrice >= 0 &&
+        (item.alias === undefined || typeof item.alias === "string") &&
+        (item.packingType === undefined || typeof item.packingType === "string") &&
+        (item.brand === undefined || typeof item.brand === "string") &&
+        (item.fabric === undefined || typeof item.fabric === "string") &&
+        (item.defect === undefined || typeof item.defect === "string"),
     );
     return items.length ? { ...value, items } : null;
   } catch {

@@ -40,11 +40,13 @@ const navItems: NavItem[] = [
   { key: "deliveries", title: "Deliveries", href: "/admin/deliveries" },
   {
     key: "services",
-    title: "Services",
+    title: "Items",
     href: "/admin/services",
     children: [
-      { title: "Categories", href: "/admin/services/categories" },
-      { title: "Services", href: "/admin/services" },
+      { title: "Garments", href: "/admin/services/categories" },
+      { title: "Items", href: "/admin/services" },
+      { title: "Rate Card", href: "/admin/rate-card" },
+      { title: "Services", href: "/admin/services/pricing" },
     ],
   },
   { key: "inventory", title: "Inventory", href: "/admin/inventory" },
@@ -135,7 +137,7 @@ export function AdminSidebar({
   const [settings, setSettings] = useState(sidebarItems);
   const [openGroups, setOpenGroups] = useState<string[]>(() =>
     navItems
-      .filter((item) => item.children && pathname.startsWith(item.href))
+      .filter((item) => item.children && (pathname.startsWith(item.href) || item.children.some((child) => pathname === child.href)))
       .map((item) => item.href),
   );
   const isCollapsed = collapsible && !open;
@@ -148,7 +150,7 @@ export function AdminSidebar({
 
   useEffect(() => {
     const activeGroup = navItems.find(
-      (item) => item.children && pathname.startsWith(item.href),
+      (item) => item.children && (pathname.startsWith(item.href) || item.children.some((child) => pathname === child.href)),
     );
     if (activeGroup) {
       setOpenGroups((current) =>
@@ -210,7 +212,8 @@ export function AdminSidebar({
           const title = setting?.label ?? item.title;
           const isActive =
             pathname === item.href ||
-            (item.href !== "/admin/dashboard" && pathname.startsWith(item.href));
+            (item.href !== "/admin/dashboard" && pathname.startsWith(item.href)) ||
+            Boolean(item.children?.some((child) => pathname === child.href));
           const itemClassName = cn(
             "group flex h-[38px] w-full items-center text-[13px] font-normal leading-none tracking-normal transition-colors",
             isCollapsed ? "justify-center px-0" : "gap-[8px] px-[28px]",

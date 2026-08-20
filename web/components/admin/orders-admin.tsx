@@ -312,8 +312,13 @@ export function AdminOrderDetails({ initialOrder }: { initialOrder: AdminOrder }
                 </TableHeader>
                 <TableBody>
                   {order.items.map((item) => (
-                    <TableRow key={item.name}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableRow key={`${item.name}-${item.alias ?? ""}-${item.quantity}`}>
+                      <TableCell>
+                        <p className="font-medium">{item.name}</p>
+                        {[item.alias, item.packingType, item.brand, item.fabric, item.defect && item.defect !== "None" ? item.defect : ""].filter(Boolean).length ? (
+                          <p className="mt-1 text-[11px] font-normal text-[#52627A]">{[item.alias, item.packingType, item.brand, item.fabric, item.defect && item.defect !== "None" ? item.defect : ""].filter(Boolean).join(" · ")}</p>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">₹{item.unitPrice}</TableCell>
                       <TableCell className="text-right font-medium">

@@ -6,7 +6,7 @@ import {
   listPortalNotifications,
 } from "@/lib/customer-portal";
 import { listOffers } from "@/lib/offers";
-import { listServiceCategories } from "@/lib/service-catalog";
+import { listCustomerItemCatalog } from "@/lib/item-master";
 import { getCurrentUser } from "@/lib/session";
 
 export async function GET() {
@@ -17,7 +17,7 @@ export async function GET() {
 
   const [wallet, categories, addresses, notifications, offers] = await Promise.all([
     getPortalWallet(user.id),
-    listServiceCategories(false),
+    listCustomerItemCatalog().then((catalog) => catalog.categories),
     listPortalAddresses(user.id),
     listPortalNotifications(user.id),
     listOffers(true),

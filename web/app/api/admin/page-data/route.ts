@@ -25,7 +25,9 @@ import {
 import { getReportData } from "@/lib/reports";
 import { getRider, listRiders } from "@/lib/riders";
 import { listSetupRoles } from "@/lib/roles";
-import { listCatalogServices, listServiceCategories } from "@/lib/service-catalog";
+import { listCatalogServices } from "@/lib/service-catalog";
+import { listItemCategories, listItems, listServices } from "@/lib/item-master";
+import { listRateCardGroups, listRateCardStoreAssignments } from "@/lib/rate-card-groups";
 import { getCurrentUser } from "@/lib/session";
 import { listStoreTeamMembers } from "@/lib/store-team";
 import { getStoreById, listStores } from "@/lib/stores";
@@ -141,20 +143,25 @@ export async function GET(request: Request) {
       return response({ deliveries, riders, stats });
     }
     case "services": {
-      const [categories, services] = await Promise.all([
-        listServiceCategories(true),
-        listCatalogServices(true),
+      const [categories, items, services, stores] = await Promise.all([
+        listItemCategories(true), listItems({ includeInactive: true }), listServices(true), listStores(),
       ]);
-      return response({ categories, services });
+      return response({ categories, items, services, stores });
     }
     case "service-categories":
-      return response({ categories: await listServiceCategories(true) });
+      return response({ categories: await listItemCategories(true) });
     case "service-pricing": {
-      const [categories, services] = await Promise.all([
-        listServiceCategories(true),
-        listCatalogServices(true),
+      return response({ services: await listServices(true) });
+    }
+    case "rate-card": {
+      const [categories, groups, services, stores, assignments] = await Promise.all([
+        listItemCategories(true),
+        listRateCardGroups(true),
+        listServices(true),
+        listStores(),
+        listRateCardStoreAssignments(),
       ]);
-      return response({ categories, services });
+      return response({ categories, groups, services, stores, assignments });
     }
     case "inventory": {
       const [items, categories, units] = await Promise.all([

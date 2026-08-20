@@ -18,11 +18,7 @@ import { AdminReferrals } from "@/components/admin/referrals-admin";
 import { AdminReports } from "@/components/admin/reports-admin";
 import { AdminRiderDetails, AdminRiders } from "@/components/admin/riders-admin";
 import { RolePermissionsAdmin } from "@/components/admin/role-permissions-admin";
-import {
-  CatalogServicesAdmin,
-  ServiceCategoriesAdmin,
-  ServicePricingAdmin,
-} from "@/components/admin/service-catalog-admin";
+import { ItemCategoriesAdmin, ItemsAdmin, MasterServicesAdmin, RateCardAdmin } from "@/components/admin/item-master-admin";
 import { StoreDetailView } from "@/components/admin/store-detail-view";
 import { StoreForm } from "@/components/admin/store-form";
 import { WalletReportView } from "@/components/admin/wallet-report-view";
@@ -46,7 +42,7 @@ import type { PermissionGroup } from "@/lib/role-permissions";
 import type { ReportData } from "@/lib/reports";
 import type { RiderDetails, RiderRecord } from "@/lib/riders";
 import type { SetupRole } from "@/lib/roles";
-import type { CatalogService, ServiceCategory } from "@/lib/service-catalog";
+import type { ItemCategory, ItemListRow, ItemMasterService, RateCardGroup, RateCardStoreAssignment } from "@/lib/item-master-types";
 import type { StoreTeamMember } from "@/lib/store-team";
 import type { Store } from "@/lib/stores";
 import type { ComplaintRecord, ComplaintStats } from "@/lib/support";
@@ -132,34 +128,47 @@ export function AdminDeliveriesClient() {
 
 export function AdminServicesClient() {
   const result = useAdminPageData<{
-    categories: ServiceCategory[];
-    services: CatalogService[];
+    categories: ItemCategory[];
+    items: ItemListRow[];
+    services: ItemMasterService[];
+    stores: Store[];
   }>("key=services", 60_000);
   if (!result.data) return <PageState {...result} />;
   return (
-    <CatalogServicesAdmin
+    <ItemsAdmin
       initialCategories={result.data.categories}
+      initialItems={result.data.items}
       initialServices={result.data.services}
+      stores={result.data.stores}
     />
   );
 }
 
 export function AdminServiceCategoriesClient() {
-  const result = useAdminPageData<{ categories: ServiceCategory[] }>(
+  const result = useAdminPageData<{ categories: ItemCategory[] }>(
     "key=service-categories",
     60_000,
   );
   if (!result.data) return <PageState {...result} />;
-  return <ServiceCategoriesAdmin initialCategories={result.data.categories} />;
+  return <ItemCategoriesAdmin initialCategories={result.data.categories} />;
 }
 
 export function AdminServicePricingClient() {
-  const result = useAdminPageData<{ categories: ServiceCategory[]; services: CatalogService[] }>(
+  const result = useAdminPageData<{ services: ItemMasterService[] }>(
     "key=service-pricing",
     60_000,
   );
   if (!result.data) return <PageState {...result} />;
-  return <ServicePricingAdmin initialCategories={result.data.categories} initialServices={result.data.services} />;
+  return <MasterServicesAdmin initialServices={result.data.services} />;
+}
+
+export function AdminRateCardClient() {
+  const result = useAdminPageData<{ categories: ItemCategory[]; groups: RateCardGroup[]; services: ItemMasterService[]; stores: Store[]; assignments: RateCardStoreAssignment[] }>(
+    "key=rate-card",
+    60_000,
+  );
+  if (!result.data) return <PageState {...result} />;
+  return <RateCardAdmin initialCategories={result.data.categories} initialGroups={result.data.groups} initialServices={result.data.services} initialStores={result.data.stores} initialAssignments={result.data.assignments} />;
 }
 
 export function AdminInventoryClient() {

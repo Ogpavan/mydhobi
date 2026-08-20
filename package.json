@@ -6,6 +6,7 @@
     "dev": "npm --prefix web run dev",
     "build": "npm --prefix web run build",
     "lint": "npm --prefix web run lint",
+    "catalog:seed": "npm --prefix web run catalog:seed",
     "app:start": "npm --prefix app run start",
     "app:android": "npm --prefix app run android",
     "app:build-apk": "npm --prefix app run build:apk"

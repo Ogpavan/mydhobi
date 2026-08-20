@@ -27,6 +27,7 @@ SplashScreen.setOptions({
 
 export default function App() {
   const webViewRef = useRef<WebView>(null);
+  const hasLoadedOnce = useRef(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,10 +36,16 @@ export default function App() {
     void SplashScreen.hideAsync();
   }, []);
 
-  useEffect(() => {
-    const fallbackTimer = setTimeout(hideSplash, 8000);
-    return () => clearTimeout(fallbackTimer);
+  const finishInitialLoad = useCallback(() => {
+    hasLoadedOnce.current = true;
+    setIsLoading(false);
+    hideSplash();
   }, [hideSplash]);
+
+  useEffect(() => {
+    const fallbackTimer = setTimeout(finishInitialLoad, 8000);
+    return () => clearTimeout(fallbackTimer);
+  }, [finishInitialLoad]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
@@ -73,6 +80,7 @@ export default function App() {
   }, []);
 
   const reload = useCallback(() => {
+    hasLoadedOnce.current = false;
     setHasError(false);
     setIsLoading(true);
     webViewRef.current?.reload();
@@ -113,10 +121,13 @@ export default function App() {
               allowsBackForwardNavigationGestures
               onNavigationStateChange={handleNavigationChange}
               onShouldStartLoadWithRequest={handleRequest}
-              onLoadStart={() => setIsLoading(true)}
-              onLoadEnd={() => {
-                setIsLoading(false);
-                hideSplash();
+              onLoadStart={() => {
+                if (!hasLoadedOnce.current) setIsLoading(true);
+              }}
+              onLoad={finishInitialLoad}
+              onLoadEnd={finishInitialLoad}
+              onLoadProgress={(event) => {
+                if (event.nativeEvent.progress >= 0.9) finishInitialLoad();
               }}
               onError={() => {
                 setHasError(true);

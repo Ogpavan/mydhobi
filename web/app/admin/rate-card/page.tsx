@@ -1,7 +1,7 @@
 "use client";
 
-import { AdminClientRedirect } from "@/components/admin/admin-client-redirect";
+import { AdminRateCardClient } from "@/components/admin/admin-client-pages";
 
 export default function RateCardPage() {
-  return <AdminClientRedirect href="/admin/services" />;
+  return <AdminRateCardClient />;
 }
