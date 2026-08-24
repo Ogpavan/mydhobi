@@ -43,10 +43,11 @@ export function AdminHeader({
     "/admin/orders": "Orders",
     "/admin/pickups": "Pickups",
     "/admin/deliveries": "Deliveries",
-    "/admin/rate-card": "Rate Card",
+    "/admin/rate-card": "Tariff Management",
     "/admin/services": "Items",
     "/admin/services/categories": "Garment Categories",
     "/admin/services/pricing": "Services",
+    "/admin/services/mapping": "Service Mapping",
     "/admin/riders": "Riders",
     "/admin/payments": "Payments",
     "/admin/offers": "Offers & Coupons",
@@ -70,6 +71,10 @@ export function AdminHeader({
     ? {
         title: "Order Details",
       }
+    : pathname.startsWith("/admin/rate-card/")
+      ? {
+          title: "Edit Tariffs",
+        }
     : pathname.startsWith("/admin/riders/")
       ? {
           title: "Rider Details",

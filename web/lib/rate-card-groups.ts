@@ -30,13 +30,64 @@ export async function listRateCardGroups(includeInactive = true) {
   return rows.map(mapGroup);
 }
 
-export async function createRateCardGroup(input: { name: string; tariffCode: string; description?: string; isActive?: boolean }) {
+export type PriceListCopySource =
+  | { type: "group"; id: number }
+  | { type: "store"; id: string };
+
+export async function createRateCardGroup(input: { name: string; tariffCode: string; description?: string; isActive?: boolean; copyFrom?: PriceListCopySource }) {
   await ensureItemMasterSchema();
-  const { rows } = await pool.query(
-    `INSERT INTO rate_card_groups(name,tariff_code,description,is_active) VALUES($1,$2,$3,$4) RETURNING *`,
-    [input.name.trim(), input.tariffCode.trim().toUpperCase(), input.description?.trim() ?? "", input.isActive ?? true],
-  );
-  return mapGroup(rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `INSERT INTO rate_card_groups(name,tariff_code,description,is_active) VALUES($1,$2,$3,$4) RETURNING *`,
+      [input.name.trim(), input.tariffCode.trim().toUpperCase(), input.description?.trim() ?? "", input.isActive ?? true],
+    );
+    const created = mapGroup(rows[0]);
+
+    if (input.copyFrom?.type === "group") {
+      const copied = await client.query(
+        `INSERT INTO rate_card_group_rates(
+           group_id,mapping_id,is_enabled,price,pricing_unit,turnaround_hours,
+           express_available,express_price,express_turnaround_hours
+         )
+         SELECT $1,mapping_id,is_enabled,price,pricing_unit,turnaround_hours,
+           express_available,express_price,express_turnaround_hours
+         FROM rate_card_group_rates WHERE group_id=$2`,
+        [created.id, input.copyFrom.id],
+      );
+      const source = await client.query("SELECT 1 FROM rate_card_groups WHERE id=$1", [input.copyFrom.id]);
+      if (!source.rows[0]) throw new Error("Price list to copy was not found.");
+      if (copied.rowCount === 0) throw new Error("The selected price list has no prices to copy.");
+    }
+
+    if (input.copyFrom?.type === "store") {
+      const source = await client.query("SELECT 1 FROM stores WHERE id=$1", [input.copyFrom.id]);
+      if (!source.rows[0]) throw new Error("Store to copy was not found.");
+      const copied = await client.query(
+        `INSERT INTO rate_card_group_rates(
+           group_id,mapping_id,is_enabled,price,pricing_unit,turnaround_hours,
+           express_available,express_price,express_turnaround_hours
+         )
+         SELECT $1,m.id,t.is_available,COALESCE(t.price,0),m.pricing_unit,m.turnaround_hours,
+           m.express_available,m.express_price,m.express_turnaround_hours
+         FROM tariffs t
+         JOIN garment_service_mappings m
+           ON m.garment_id=t.item_id AND m.service_id=t.service_id
+         WHERE t.store_id=$2`,
+        [created.id, input.copyFrom.id],
+      );
+      if (copied.rowCount === 0) throw new Error("This store has no saved tariffs to copy.");
+    }
+
+    await client.query("COMMIT");
+    return created;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateRateCardGroup(id: number, input: Partial<{ name: string; tariffCode: string; description: string; isActive: boolean }>) {
@@ -53,9 +104,7 @@ export async function updateRateCardGroup(id: number, input: Partial<{ name: str
 export async function deleteRateCardGroup(id: number) {
   await ensureItemMasterSchema();
   const assigned = await pool.query("SELECT 1 FROM store_rate_card_assignments WHERE group_id=$1 LIMIT 1", [id]);
-  if (assigned.rows[0]) throw new Error("This tariff card is assigned to a store. Remove the assignment before deleting it.");
-  const used = await pool.query("SELECT 1 FROM rate_card_group_rates WHERE group_id=$1 LIMIT 1", [id]);
-  if (used.rows[0]) throw new Error("This rate group has rates. Deactivate it instead of deleting it.");
+  if (assigned.rows[0]) throw new Error("This price list is assigned to a store. Remove the assignment before deleting it.");
   const result = await pool.query("DELETE FROM rate_card_groups WHERE id=$1 RETURNING id", [id]);
   return Boolean(result.rows[0]);
 }
@@ -181,4 +230,33 @@ export async function assignRateCardToStore(storeId: string, groupId: number | n
     [storeId, groupId],
   );
   return groupId;
+}
+
+export async function assignRateCardsToStores(assignments: Array<{ storeId: string; groupId: number | null }>) {
+  await ensureItemMasterSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const assignment of assignments) {
+      const store = await client.query("SELECT 1 FROM stores WHERE id=$1", [assignment.storeId]);
+      if (!store.rows[0]) throw new Error("Store not found.");
+      if (assignment.groupId === null) {
+        await client.query("DELETE FROM store_rate_card_assignments WHERE store_id=$1", [assignment.storeId]);
+        continue;
+      }
+      const group = await client.query("SELECT 1 FROM rate_card_groups WHERE id=$1 AND is_active=TRUE", [assignment.groupId]);
+      if (!group.rows[0]) throw new Error("Active price list not found.");
+      await client.query(
+        `INSERT INTO store_rate_card_assignments(store_id,group_id) VALUES($1,$2)
+         ON CONFLICT(store_id) DO UPDATE SET group_id=EXCLUDED.group_id,updated_at=NOW()`,
+        [assignment.storeId, assignment.groupId],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

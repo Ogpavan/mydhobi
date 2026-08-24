@@ -153,15 +153,14 @@ export async function GET(request: Request) {
     case "service-pricing": {
       return response({ services: await listServices(true) });
     }
+    case "service-mapping": {
+      return response({ categories: await listItemCategories(false) });
+    }
     case "rate-card": {
-      const [categories, groups, services, stores, assignments] = await Promise.all([
-        listItemCategories(true),
-        listRateCardGroups(true),
-        listServices(true),
-        listStores(),
-        listRateCardStoreAssignments(),
+      const [categories, stores, groups, assignments] = await Promise.all([
+        listItemCategories(false), listStores(), listRateCardGroups(true), listRateCardStoreAssignments(),
       ]);
-      return response({ categories, groups, services, stores, assignments });
+      return response({ categories, stores, groups, assignments });
     }
     case "inventory": {
       const [items, categories, units] = await Promise.all([

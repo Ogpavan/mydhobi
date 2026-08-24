@@ -187,6 +187,23 @@ export function ensureItemMasterSchema() {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS store_rate_card_assignments_group_idx ON store_rate_card_assignments(group_id);
+        CREATE TABLE IF NOT EXISTS tariffs (
+          id BIGSERIAL PRIMARY KEY,
+          store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+          item_id BIGINT NOT NULL REFERENCES garments(id) ON DELETE RESTRICT,
+          service_id BIGINT NOT NULL REFERENCES services(id) ON DELETE RESTRICT,
+          price NUMERIC(12,2) CHECK (price IS NULL OR price >= 0),
+          is_available BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          CONSTRAINT tariffs_available_price CHECK (
+            (is_available = TRUE AND price IS NOT NULL) OR
+            (is_available = FALSE AND price IS NULL)
+          ),
+          UNIQUE(store_id, item_id, service_id)
+        );
+        CREATE INDEX IF NOT EXISTS tariffs_store_item_idx ON tariffs(store_id, item_id);
+        CREATE INDEX IF NOT EXISTS tariffs_item_service_idx ON tariffs(item_id, service_id);
       `);
       await migrateLegacyCatalog();
     })().catch((error) => { setupPromise = null; throw error; });
@@ -405,7 +422,7 @@ export async function getCustomerItemPrice(garmentId: number, serviceId: number,
   await ensureItemMasterSchema();
   const resolvedStoreId = await resolveCatalogStoreId(storeId);
   const { rows } = await pool.query<Record<string, unknown>>(
-    `SELECT COALESCE(gr.price,m.price) AS price,
+    `SELECT COALESCE(gr.price,t.price,m.price) AS price,
       COALESCE(gr.pricing_unit,m.pricing_unit) AS pricing_unit,
       COALESCE(gr.turnaround_hours,m.turnaround_hours) AS turnaround_hours,
       COALESCE(gr.express_available,m.express_available) AS express_available,
@@ -416,7 +433,9 @@ export async function getCustomerItemPrice(garmentId: number, serviceId: number,
      LEFT JOIN store_rate_card_assignments a ON a.store_id=$3
      LEFT JOIN rate_card_groups card ON card.id=a.group_id AND card.is_active=TRUE
      LEFT JOIN rate_card_group_rates gr ON gr.group_id=card.id AND gr.mapping_id=m.id
-     WHERE g.id=$1 AND g.is_active=TRUE AND c.is_active=TRUE AND s.is_active=TRUE AND COALESCE(gr.is_enabled,m.is_enabled)=TRUE
+     LEFT JOIN tariffs t ON t.store_id=$3 AND t.item_id=g.id AND t.service_id=s.id
+     WHERE g.id=$1 AND g.is_active=TRUE AND c.is_active=TRUE AND s.is_active=TRUE
+       AND m.is_enabled=TRUE AND COALESCE(gr.is_enabled,t.is_available,TRUE)=TRUE
      LIMIT 1`,
     [garmentId, serviceId, resolvedStoreId],
   );
@@ -437,7 +456,7 @@ export async function listCustomerItemCatalog(storeId?: string | null) {
     SELECT g.id AS garment_id,g.name AS garment_name,g.short_code,g.image_path AS garment_image_path,
       c.name AS category_name,c.sort_order AS category_sort_order,
       s.id AS service_id,s.name AS service_name,s.slug AS service_slug,s.image_path AS service_image_path,s.sort_order AS service_sort_order,
-      COALESCE(gr.price,m.price) AS price,COALESCE(gr.pricing_unit,m.pricing_unit) AS pricing_unit,
+      COALESCE(gr.price,t.price,m.price) AS price,COALESCE(gr.pricing_unit,m.pricing_unit) AS pricing_unit,
       COALESCE(gr.turnaround_hours,m.turnaround_hours) AS turnaround_hours,
       COALESCE(gr.express_available,m.express_available) AS express_available,
       COALESCE(gr.express_price,m.express_price) AS express_price
@@ -447,7 +466,9 @@ export async function listCustomerItemCatalog(storeId?: string | null) {
     LEFT JOIN store_rate_card_assignments a ON a.store_id=$1
     LEFT JOIN rate_card_groups card ON card.id=a.group_id AND card.is_active=TRUE
     LEFT JOIN rate_card_group_rates gr ON gr.group_id=card.id AND gr.mapping_id=m.id
-    WHERE g.is_active=TRUE AND c.is_active=TRUE AND COALESCE(gr.is_enabled,m.is_enabled)=TRUE
+    LEFT JOIN tariffs t ON t.store_id=$1 AND t.item_id=g.id AND t.service_id=s.id
+    WHERE g.is_active=TRUE AND c.is_active=TRUE
+      AND m.is_enabled=TRUE AND COALESCE(gr.is_enabled,t.is_available,TRUE)=TRUE
     ORDER BY c.sort_order,c.name,g.sort_order,g.name,s.sort_order,s.name
   `, [resolvedStoreId]);
   const audienceFor = (value: string): "men" | "women" | "kid" | "other" => {

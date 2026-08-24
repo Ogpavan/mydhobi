@@ -18,7 +18,9 @@ import { AdminReferrals } from "@/components/admin/referrals-admin";
 import { AdminReports } from "@/components/admin/reports-admin";
 import { AdminRiderDetails, AdminRiders } from "@/components/admin/riders-admin";
 import { RolePermissionsAdmin } from "@/components/admin/role-permissions-admin";
-import { ItemCategoriesAdmin, ItemsAdmin, MasterServicesAdmin, RateCardAdmin } from "@/components/admin/item-master-admin";
+import { ServiceMappingAdmin } from "@/components/admin/service-mapping-admin";
+import { ItemCategoriesAdmin, ItemsAdmin, MasterServicesAdmin } from "@/components/admin/item-master-admin";
+import { TariffManagement } from "@/components/admin/tariff-management";
 import { StoreDetailView } from "@/components/admin/store-detail-view";
 import { StoreForm } from "@/components/admin/store-form";
 import { WalletReportView } from "@/components/admin/wallet-report-view";
@@ -162,13 +164,32 @@ export function AdminServicePricingClient() {
   return <MasterServicesAdmin initialServices={result.data.services} />;
 }
 
+export function AdminServiceMappingClient() {
+  const result = useAdminPageData<{ categories: ItemCategory[] }>(
+    "key=service-mapping",
+    60_000,
+  );
+  if (!result.data) return <PageState {...result} />;
+  return <ServiceMappingAdmin initialCategories={result.data.categories} />;
+}
+
 export function AdminRateCardClient() {
-  const result = useAdminPageData<{ categories: ItemCategory[]; groups: RateCardGroup[]; services: ItemMasterService[]; stores: Store[]; assignments: RateCardStoreAssignment[] }>(
+  const result = useAdminPageData<{ categories: ItemCategory[]; stores: Store[]; groups: RateCardGroup[]; assignments: RateCardStoreAssignment[] }>(
     "key=rate-card",
     60_000,
   );
   if (!result.data) return <PageState {...result} />;
-  return <RateCardAdmin initialCategories={result.data.categories} initialGroups={result.data.groups} initialServices={result.data.services} initialStores={result.data.stores} initialAssignments={result.data.assignments} />;
+  return <TariffManagement initialCategories={result.data.categories} initialStores={result.data.stores} initialGroups={result.data.groups} initialAssignments={result.data.assignments} />;
+}
+
+export function AdminTariffEditorClient() {
+  const { id } = useParams<{ id: string }>();
+  const result = useAdminPageData<{ categories: ItemCategory[]; stores: Store[]; groups: RateCardGroup[]; assignments: RateCardStoreAssignment[] }>(
+    "key=rate-card",
+    60_000,
+  );
+  if (!result.data) return <PageState {...result} />;
+  return <TariffManagement initialCategories={result.data.categories} initialStores={result.data.stores} initialGroups={result.data.groups} initialAssignments={result.data.assignments} initialGroupId={Number(id)} />;
 }
 
 export function AdminInventoryClient() {
