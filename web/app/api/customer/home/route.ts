@@ -4,6 +4,7 @@ import {
   getPortalWallet,
   listPortalAddresses,
   listPortalNotifications,
+  resolveCustomerStoreId,
 } from "@/lib/customer-portal";
 import { listOffers } from "@/lib/offers";
 import { listCustomerItemCatalog } from "@/lib/item-master";
@@ -15,12 +16,13 @@ export async function GET() {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
+  const storeId = await resolveCustomerStoreId(user.id);
   const [wallet, categories, addresses, notifications, offers] = await Promise.all([
     getPortalWallet(user.id),
-    listCustomerItemCatalog().then((catalog) => catalog.categories),
+    listCustomerItemCatalog(storeId).then((catalog) => catalog.categories),
     listPortalAddresses(user.id),
     listPortalNotifications(user.id),
-    listOffers(true),
+    listOffers(true, storeId),
   ]);
 
   return NextResponse.json({

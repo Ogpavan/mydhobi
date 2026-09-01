@@ -36,6 +36,11 @@ export async function POST(request: Request) {
 
   try {
     const payload = normalizeStorePayload(await request.json());
+    if (user.role !== "admin") {
+      payload.discountsEnabled = false;
+      payload.maxDiscountPercent = 0;
+      payload.maxDiscountAmount = 0;
+    }
     const error = validateStorePayload(payload);
 
     if (error) {

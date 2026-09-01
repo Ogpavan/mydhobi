@@ -134,6 +134,20 @@ export function OrderDetailsView({ order }: { order: PortalOrder }) {
             <span>Total Items</span>
             <span>{order.itemCount} items</span>
           </div>
+          <dl className="mt-3 grid grid-cols-[1fr_auto] gap-y-2 border-t border-[#eceaf1] pt-3 text-[10px]">
+            <dt className="text-[#77798a]">Subtotal</dt>
+            <dd>₹{order.subtotal}</dd>
+            {order.discountAmount > 0 ? (
+              <>
+                <dt className="text-[#23a84f]">
+                  Discount{order.couponCode ? ` (${order.couponCode})` : ""}
+                </dt>
+                <dd className="text-[#23a84f]">-₹{order.discountAmount}</dd>
+              </>
+            ) : null}
+            <dt className="font-bold">Total</dt>
+            <dd className="font-bold">₹{order.amount}</dd>
+          </dl>
         </section>
       </main>
 

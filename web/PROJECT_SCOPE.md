@@ -240,8 +240,10 @@ Complaint statuses are `Open`, `In Progress`, and `Resolved`.
 ### 6.7 Offer and referral workflow
 
 - Admins create offers with a code, discount rules, active dates, usage limits, and active state.
+- Admins can allow store discounts and set a maximum percentage and amount for each store.
+- Store managers can create and manage offers only for their assigned store and only within its current limits.
 - Customers see only offers eligible for customer use.
-- Checkout validates the code against subtotal and validity rules before creating the order.
+- Checkout validates the code against the customer's store, subtotal, current store limits, and validity rules before creating the order.
 - A pending referral benefit may be selected in place of a coupon when it provides the greater supported discount.
 - A successful referral is marked rewarded only after the qualifying order is created.
 

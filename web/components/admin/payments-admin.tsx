@@ -30,6 +30,7 @@ const statuses: Array<PaymentStatus | "All"> = [
   "Paid",
   "Failed",
   "Refunded",
+  "Cancelled",
 ];
 
 const statusTone: Record<PaymentStatus, string> = {
@@ -37,6 +38,7 @@ const statusTone: Record<PaymentStatus, string> = {
   Paid: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Failed: "border-red-200 bg-red-50 text-red-700",
   Refunded: "border-violet-200 bg-violet-50 text-violet-700",
+  Cancelled: "border-slate-200 bg-slate-50 text-slate-600",
 };
 
 function formatDate(value: string) {
@@ -87,26 +89,31 @@ export function AdminPayments({
       return;
     }
     setSavingId(payment.id);
-    const response = await fetch(`/api/admin/payments/${payment.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    const data = (await response.json()) as {
-      payment?: PaymentRecord;
-      message?: string;
-    };
-    setSavingId("");
-    if (!response.ok || !data.payment) {
-      toast.error(data.message ?? "Unable to update payment");
-      return;
+    try {
+      const response = await fetch(`/api/admin/payments/${payment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = (await response.json()) as {
+        payment?: PaymentRecord;
+        message?: string;
+      };
+      if (!response.ok || !data.payment) {
+        toast.error(data.message ?? "Unable to update payment");
+        return;
+      }
+      setPayments((current) =>
+        current.map((item) =>
+          item.id === payment.id ? data.payment! : item,
+        ),
+      );
+      toast.success(`Payment marked ${nextStatus}`);
+    } catch {
+      toast.error("Unable to update payment. Check your connection and try again.");
+    } finally {
+      setSavingId("");
     }
-    setPayments((current) =>
-      current.map((item) =>
-        item.id === payment.id ? data.payment! : item,
-      ),
-    );
-    toast.success(`Payment marked ${nextStatus}`);
   }
 
   const cards = [

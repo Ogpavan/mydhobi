@@ -40,6 +40,7 @@ const statusTone: Record<PickupStatus, string> = {
   "Out for Pickup": "border-orange-200 bg-orange-50 text-orange-700",
   Completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Failed: "border-red-200 bg-red-50 text-red-700",
+  Cancelled: "border-slate-200 bg-slate-50 text-slate-600",
 };
 
 function formatDate(value: string) {
@@ -84,24 +85,29 @@ export function AdminPickups({
     change: { riderId?: string; status?: PickupStatus },
   ) {
     setSavingId(pickup.id);
-    const response = await fetch(`/api/admin/pickups/${pickup.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(change),
-    });
-    const data = (await response.json()) as {
-      pickup?: PickupTask;
-      message?: string;
-    };
-    setSavingId("");
-    if (!response.ok || !data.pickup) {
-      toast.error(data.message ?? "Unable to update pickup");
-      return;
+    try {
+      const response = await fetch(`/api/admin/pickups/${pickup.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(change),
+      });
+      const data = (await response.json()) as {
+        pickup?: PickupTask;
+        message?: string;
+      };
+      if (!response.ok || !data.pickup) {
+        toast.error(data.message ?? "Unable to update pickup");
+        return;
+      }
+      setPickups((current) =>
+        current.map((item) => (item.id === pickup.id ? data.pickup! : item)),
+      );
+      toast.success("Pickup updated");
+    } catch {
+      toast.error("Unable to update pickup. Check your connection and try again.");
+    } finally {
+      setSavingId("");
     }
-    setPickups((current) =>
-      current.map((item) => (item.id === pickup.id ? data.pickup! : item)),
-    );
-    toast.success("Pickup updated");
   }
 
   function nextAction(pickup: PickupTask) {

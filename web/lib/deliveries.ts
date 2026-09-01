@@ -4,6 +4,9 @@ import {
   listPickupRiders,
   type PickupRider,
 } from "@/lib/pickups";
+import { applyOrderStatusTransition } from "@/lib/order-workflow";
+import { ensureReferralSchema } from "@/lib/referrals";
+import { ensurePaymentLedger } from "@/lib/payments";
 
 export const deliveryStatuses = [
   "Ready",
@@ -11,6 +14,7 @@ export const deliveryStatuses = [
   "Out for Delivery",
   "Delivered",
   "Failed",
+  "Cancelled",
 ] as const;
 
 export type DeliveryStatus = (typeof deliveryStatuses)[number];
@@ -98,6 +102,23 @@ export async function syncDeliveryTasks() {
     WHERE orders.status IN ('Ready','Out for Delivery','Delivered')
     ON CONFLICT (order_id) DO NOTHING
   `);
+  await pool.query(`
+    UPDATE order_deliveries deliveries
+    SET status=CASE
+        WHEN orders.status='Cancelled' AND deliveries.status <> 'Delivered' THEN 'Cancelled'
+        WHEN orders.status='Delivered' THEN 'Delivered'
+        WHEN orders.status='Out for Delivery' AND deliveries.status NOT IN ('Delivered','Cancelled') THEN 'Out for Delivery'
+        ELSE deliveries.status
+      END,
+      completed_at=CASE WHEN orders.status='Delivered'
+        THEN COALESCE(deliveries.completed_at,NOW()) ELSE deliveries.completed_at END,
+      updated_at=NOW()
+    FROM customer_orders orders
+    WHERE deliveries.order_id=orders.id
+      AND ((orders.status='Cancelled' AND deliveries.status NOT IN ('Delivered','Cancelled'))
+        OR (orders.status='Delivered' AND deliveries.status <> 'Delivered')
+        OR (orders.status='Out for Delivery' AND deliveries.status NOT IN ('Out for Delivery','Delivered','Cancelled')))
+  `);
 }
 
 function statusFromValue(value: unknown): DeliveryStatus {
@@ -156,9 +177,9 @@ export async function getDeliveryStats(storeId?: string | null): Promise<Deliver
           AND deliveries.scheduled_at < date_trunc('day',NOW()) + interval '1 day'
       )::int AS today,
       COUNT(*) FILTER (WHERE deliveries.status='Delivered')::int AS delivered,
-      COUNT(*) FILTER (WHERE deliveries.status NOT IN ('Delivered','Failed'))::int AS pending,
+      COUNT(*) FILTER (WHERE deliveries.status NOT IN ('Delivered','Failed','Cancelled'))::int AS pending,
       COUNT(*) FILTER (
-        WHERE deliveries.rider_id IS NULL AND deliveries.status NOT IN ('Delivered','Failed')
+        WHERE deliveries.rider_id IS NULL AND deliveries.status NOT IN ('Delivered','Failed','Cancelled')
       )::int AS unassigned
     FROM order_deliveries deliveries
     INNER JOIN customer_orders orders ON orders.id=deliveries.order_id
@@ -178,6 +199,7 @@ const deliveryTransitions: Record<DeliveryStatus, DeliveryStatus[]> = {
   "Out for Delivery": ["Delivered", "Failed"],
   Delivered: [],
   Failed: ["Ready"],
+  Cancelled: [],
 };
 
 export async function updateDeliveryTask(
@@ -190,12 +212,17 @@ export async function updateDeliveryTask(
   },
   storeId?: string | null,
 ) {
-  await syncDeliveryTasks();
+  await Promise.all([
+    syncDeliveryTasks(),
+    ensureReferralSchema(),
+    ensurePaymentLedger(),
+  ]);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const currentResult = await client.query(
-      `SELECT deliveries.*,orders.user_id,orders.status AS order_status
+      `SELECT deliveries.*,orders.user_id,orders.status AS order_status,
+        orders.store_id AS order_store_id
        FROM order_deliveries deliveries
        INNER JOIN customer_orders orders ON orders.id=deliveries.order_id
        WHERE deliveries.id=$1 AND ($2::uuid IS NULL OR orders.store_id=$2) FOR UPDATE`,
@@ -207,6 +234,10 @@ export async function updateDeliveryTask(
     }
 
     const current = currentResult.rows[0];
+    if (current.order_status === "Cancelled" || current.order_status === "Delivered") {
+      await client.query("ROLLBACK");
+      return { kind: "order_closed" as const };
+    }
     const currentStatus = statusFromValue(current.status);
     let nextStatus = input.status ?? currentStatus;
     const riderId =
@@ -229,6 +260,18 @@ export async function updateDeliveryTask(
     ) {
       await client.query("ROLLBACK");
       return { kind: "rider_required" as const };
+    }
+    if (riderId) {
+      const rider = await client.query(
+        `SELECT id FROM riders
+         WHERE id=$1 AND status <> 'Off Duty'
+           AND store_id IS NOT DISTINCT FROM $2::uuid`,
+        [riderId, current.order_store_id],
+      );
+      if (!rider.rows[0]) {
+        await client.query("ROLLBACK");
+        return { kind: "invalid_rider" as const };
+      }
     }
 
     await client.query(
@@ -253,24 +296,17 @@ export async function updateDeliveryTask(
       currentStatus !== nextStatus &&
       current.order_status === "Ready"
     ) {
-      await client.query(
-        `UPDATE customer_orders SET status='Out for Delivery',updated_at=NOW()
-         WHERE id=$1`,
-        [current.order_id],
+      const orderResult = await applyOrderStatusTransition(
+        client,
+        String(current.order_id),
+        "Out for Delivery",
+        "Rider left for delivery",
+        storeId,
       );
-      await client.query(
-        `INSERT INTO customer_order_status_history (order_id,status,note)
-         VALUES ($1,'Out for Delivery','Rider left for delivery')`,
-        [current.order_id],
-      );
-      await client.query(
-        `INSERT INTO customer_notifications (user_id,title,message)
-         VALUES ($1,'Out for Delivery',$2)`,
-        [
-          current.user_id,
-          `Order #${current.order_id} is out for delivery.`,
-        ],
-      );
+      if (orderResult.kind !== "updated") {
+        await client.query("ROLLBACK");
+        return orderResult;
+      }
     }
 
     if (
@@ -278,25 +314,17 @@ export async function updateDeliveryTask(
       currentStatus !== nextStatus &&
       current.order_status === "Out for Delivery"
     ) {
-      await client.query(
-        `UPDATE customer_orders
-         SET status='Delivered',delivery_at=NOW(),updated_at=NOW()
-         WHERE id=$1`,
-        [current.order_id],
+      const orderResult = await applyOrderStatusTransition(
+        client,
+        String(current.order_id),
+        "Delivered",
+        "Delivery completed",
+        storeId,
       );
-      await client.query(
-        `INSERT INTO customer_order_status_history (order_id,status,note)
-         VALUES ($1,'Delivered','Delivery completed')`,
-        [current.order_id],
-      );
-      await client.query(
-        `INSERT INTO customer_notifications (user_id,title,message)
-         VALUES ($1,'Order Delivered',$2)`,
-        [
-          current.user_id,
-          `Order #${current.order_id} has been delivered.`,
-        ],
-      );
+      if (orderResult.kind !== "updated") {
+        await client.query("ROLLBACK");
+        return orderResult;
+      }
     }
 
     await client.query("COMMIT");

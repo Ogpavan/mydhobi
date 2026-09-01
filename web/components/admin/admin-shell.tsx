@@ -11,10 +11,12 @@ export function AdminShell({
   children,
   user,
   sidebarItems,
+  allowedPageKeys,
 }: {
   children: React.ReactNode;
   user: AuthUser;
   sidebarItems: SidebarSetting[];
+  allowedPageKeys?: string[];
 }) {
   return (
     <SidebarProvider defaultOpen>
@@ -27,6 +29,7 @@ export function AdminShell({
           showRolePermissions={user.role === "admin"}
           storeManager={user.role === "store_manager"}
           sidebarItems={sidebarItems}
+          allowedPageKeys={allowedPageKeys}
         />
         <SidebarInset>
           <AdminHeader user={user} sidebarItems={sidebarItems} />

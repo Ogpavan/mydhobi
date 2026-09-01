@@ -16,7 +16,7 @@ export type ReferralRecord = {
   referrerMobile: string;
   friendName: string;
   friendMobile: string;
-  status: "Pending" | "Rewarded";
+  status: "Pending" | "Applied" | "Rewarded";
   rewardAmount: number;
   createdAt: string;
   rewardedAt: string | null;
@@ -45,9 +45,15 @@ export function ensureReferralSchema() {
           rewarded_at TIMESTAMPTZ,
           CONSTRAINT customer_referrals_not_self
             CHECK (referrer_id <> referred_user_id),
+          order_id VARCHAR(20),
           CONSTRAINT customer_referrals_status
-            CHECK (status IN ('Pending','Rewarded'))
+            CHECK (status IN ('Pending','Applied','Rewarded'))
         );
+        ALTER TABLE customer_referrals
+        ADD COLUMN IF NOT EXISTS order_id VARCHAR(20);
+        ALTER TABLE customer_referrals DROP CONSTRAINT IF EXISTS customer_referrals_status;
+        ALTER TABLE customer_referrals ADD CONSTRAINT customer_referrals_status
+        CHECK (status IN ('Pending','Applied','Rewarded'));
         CREATE INDEX IF NOT EXISTS customer_referrals_referrer_idx
         ON customer_referrals(referrer_id, created_at DESC);
       `)
@@ -175,7 +181,7 @@ export async function rewardReferral(
 ) {
   const referral = await client.query(
     `UPDATE customer_referrals SET status='Rewarded',rewarded_at=NOW()
-     WHERE id=$1 AND status='Pending'
+     WHERE id=$1 AND status IN ('Pending','Applied')
      RETURNING referrer_id,referred_user_id,reward_amount`,
     [referralId],
   );
@@ -196,6 +202,46 @@ export async function rewardReferral(
     `INSERT INTO customer_notifications(user_id,title,message)
      VALUES($1,'Referral Reward',$2)`,
     [row.referrer_id, `₹${Number(row.reward_amount)} was added to your wallet.`],
+  );
+}
+
+export async function applyReferralDiscount(
+  client: PoolClient,
+  referralId: string,
+  orderId: string,
+) {
+  const result = await client.query(
+    `UPDATE customer_referrals
+     SET status='Applied',order_id=$2,rewarded_at=NULL
+     WHERE id=$1 AND status='Pending'`,
+    [referralId, orderId],
+  );
+  if (result.rowCount === 0) throw new Error("REFERRAL_NOT_AVAILABLE");
+}
+
+export async function rewardReferralForOrder(
+  client: PoolClient,
+  orderId: string,
+) {
+  const referral = await client.query<{ id: string }>(
+    `SELECT id FROM customer_referrals
+     WHERE order_id=$1 AND status='Applied' FOR UPDATE`,
+    [orderId],
+  );
+  if (referral.rows[0]) {
+    await rewardReferral(client, String(referral.rows[0].id));
+  }
+}
+
+export async function releaseReferralForOrder(
+  client: PoolClient,
+  orderId: string,
+) {
+  await client.query(
+    `UPDATE customer_referrals
+     SET status='Pending',order_id=NULL,rewarded_at=NULL
+     WHERE order_id=$1 AND status='Applied'`,
+    [orderId],
   );
 }
 

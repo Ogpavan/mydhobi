@@ -9,6 +9,7 @@ import {
 } from "@/lib/customer-portal";
 import { orderStatuses } from "@/lib/order-lifecycle";
 import { getCurrentUser } from "@/lib/session";
+import { canAccessAdminPage } from "@/lib/role-permissions";
 
 export const runtime = "nodejs";
 
@@ -21,12 +22,15 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!(await getAdminUser())) {
+  const user = await getAdminUser();
+  if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+  if (!(await canAccessAdminPage(user, "orders"))) {
+    return NextResponse.json({ message: "You do not have access to orders." }, { status: 403 });
+  }
   const { id } = await params;
-  const user = await getAdminUser();
-  const order = await getAdminOrder(id, user?.role === "store_manager" ? user.storeId : null);
+  const order = await getAdminOrder(id, user.role === "store_manager" ? user.storeId : null);
   if (!order) {
     return NextResponse.json({ message: "Order not found." }, { status: 404 });
   }
@@ -37,8 +41,12 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!(await getAdminUser())) {
+  const user = await getAdminUser();
+  if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await canAccessAdminPage(user, "orders"))) {
+    return NextResponse.json({ message: "You do not have access to orders." }, { status: 403 });
   }
 
   try {
@@ -56,19 +64,34 @@ export async function PATCH(
       );
     }
 
-    const user = await getAdminUser();
     const result = await updateAdminOrderStatus(
       id,
       status as PortalOrderStatus,
       note,
-      user?.role === "store_manager" ? user.storeId : null,
+      user.role === "store_manager" ? user.storeId : null,
     );
     if (result.kind === "not_found") {
       return NextResponse.json({ message: "Order not found." }, { status: 404 });
     }
     if (result.kind === "invalid_transition") {
       return NextResponse.json(
-        { message: `Order is already ${result.currentStatus}.` },
+        { message: `Order cannot move from ${result.currentStatus} to ${status}.` },
+        { status: 409 },
+      );
+    }
+    if (result.kind === "payment_required") {
+      return NextResponse.json(
+        { message: "Confirm payment before marking this order delivered." },
+        { status: 409 },
+      );
+    }
+    if (result.kind === "rider_required") {
+      return NextResponse.json(
+        {
+          message: result.task === "pickup"
+            ? "Assign a pickup rider first."
+            : "Assign a delivery rider first.",
+        },
         { status: 409 },
       );
     }

@@ -45,6 +45,7 @@ const statusTone: Record<DeliveryStatus, string> = {
   "Out for Delivery": "border-orange-200 bg-orange-50 text-orange-700",
   Delivered: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Failed: "border-red-200 bg-red-50 text-red-700",
+  Cancelled: "border-slate-200 bg-slate-50 text-slate-600",
 };
 
 function formatDate(value: string) {
@@ -89,26 +90,31 @@ export function AdminDeliveries({
     change: { riderId?: string; status?: DeliveryStatus },
   ) {
     setSavingId(delivery.id);
-    const response = await fetch(`/api/admin/deliveries/${delivery.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(change),
-    });
-    const data = (await response.json()) as {
-      delivery?: DeliveryTask;
-      message?: string;
-    };
-    setSavingId("");
-    if (!response.ok || !data.delivery) {
-      toast.error(data.message ?? "Unable to update delivery");
-      return;
+    try {
+      const response = await fetch(`/api/admin/deliveries/${delivery.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(change),
+      });
+      const data = (await response.json()) as {
+        delivery?: DeliveryTask;
+        message?: string;
+      };
+      if (!response.ok || !data.delivery) {
+        toast.error(data.message ?? "Unable to update delivery");
+        return;
+      }
+      setDeliveries((current) =>
+        current.map((item) =>
+          item.id === delivery.id ? data.delivery! : item,
+        ),
+      );
+      toast.success("Delivery updated");
+    } catch {
+      toast.error("Unable to update delivery. Check your connection and try again.");
+    } finally {
+      setSavingId("");
     }
-    setDeliveries((current) =>
-      current.map((item) =>
-        item.id === delivery.id ? data.delivery! : item,
-      ),
-    );
-    toast.success("Delivery updated");
   }
 
   function nextAction(delivery: DeliveryTask) {

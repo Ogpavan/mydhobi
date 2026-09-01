@@ -6,6 +6,7 @@ import {
   type PickupStatus,
 } from "@/lib/pickups";
 import { getCurrentUser } from "@/lib/session";
+import { canAccessAdminPage } from "@/lib/role-permissions";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,9 @@ export async function PATCH(
   const user = await getCurrentUser();
   if (!user || user.role === "customer") {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await canAccessAdminPage(user, "pickups"))) {
+    return NextResponse.json({ message: "You do not have access to pickups." }, { status: 403 });
   }
 
   try {
@@ -72,6 +76,24 @@ export async function PATCH(
       return NextResponse.json(
         { message: "Assign a rider first." },
         { status: 400 },
+      );
+    }
+    if (result.kind === "invalid_rider") {
+      return NextResponse.json(
+        { message: "Select an active rider from this store." },
+        { status: 400 },
+      );
+    }
+    if (result.kind === "order_closed") {
+      return NextResponse.json(
+        { message: "This order is already closed." },
+        { status: 409 },
+      );
+    }
+    if (result.kind === "payment_required") {
+      return NextResponse.json(
+        { message: "Confirm payment before closing this order." },
+        { status: 409 },
       );
     }
     return NextResponse.json({ pickup: result.pickup });

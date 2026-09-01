@@ -6,6 +6,7 @@ export const paymentStatuses = [
   "Paid",
   "Failed",
   "Refunded",
+  "Cancelled",
 ] as const;
 export type PaymentStatus = (typeof paymentStatuses)[number];
 
@@ -131,7 +132,7 @@ export async function updatePaymentStatus(
   try {
     await client.query("BEGIN");
     const currentResult = await client.query(
-      `SELECT payments.* FROM customer_payments payments
+      `SELECT payments.*,orders.status AS order_status FROM customer_payments payments
        LEFT JOIN customer_orders orders ON orders.id=payments.order_id
        WHERE payments.id=$1 AND ($2::uuid IS NULL OR orders.store_id=$2) FOR UPDATE`,
       [id, storeId ?? null],
@@ -151,6 +152,13 @@ export async function updatePaymentStatus(
     if (!allowed) {
       await client.query("ROLLBACK");
       return { kind: "invalid_transition" as const, currentStatus };
+    }
+    if (
+      nextStatus === "Refunded" &&
+      !["Cancelled", "Delivered"].includes(String(current.order_status))
+    ) {
+      await client.query("ROLLBACK");
+      return { kind: "order_must_be_closed" as const };
     }
 
     await client.query(

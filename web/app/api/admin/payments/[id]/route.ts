@@ -6,6 +6,7 @@ import {
   type PaymentStatus,
 } from "@/lib/payments";
 import { getCurrentUser } from "@/lib/session";
+import { canAccessAdminPage } from "@/lib/role-permissions";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,9 @@ export async function PATCH(
   const user = await getCurrentUser();
   if (!user || user.role === "customer") {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+  if (!(await canAccessAdminPage(user, "payments"))) {
+    return NextResponse.json({ message: "You do not have access to payments." }, { status: 403 });
   }
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -40,6 +44,12 @@ export async function PATCH(
     if (result.kind === "invalid_transition") {
       return NextResponse.json(
         { message: `Payment is already ${result.currentStatus}.` },
+        { status: 409 },
+      );
+    }
+    if (result.kind === "order_must_be_closed") {
+      return NextResponse.json(
+        { message: "Cancel the order before refunding it." },
         { status: 409 },
       );
     }

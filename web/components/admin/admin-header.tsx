@@ -67,7 +67,11 @@ export function AdminHeader({
     "/admin/reports/inventory": "Inventory Report",
     "/admin/reports/complaints": "Complaint Report",
   };
-  const pageMeta = pathname.startsWith("/admin/orders/")
+  const pageMeta = pathname === "/admin/orders/new"
+    ? {
+        title: "Book new order",
+      }
+    : pathname.startsWith("/admin/orders/")
     ? {
         title: "Order Details",
       }

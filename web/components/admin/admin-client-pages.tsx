@@ -47,6 +47,7 @@ import type { SetupRole } from "@/lib/roles";
 import type { ItemCategory, ItemListRow, ItemMasterService, RateCardGroup, RateCardStoreAssignment } from "@/lib/item-master-types";
 import type { StoreTeamMember } from "@/lib/store-team";
 import type { Store } from "@/lib/stores";
+import type { StoreDiscountPolicy } from "@/lib/stores";
 import type { ComplaintRecord, ComplaintStats } from "@/lib/support";
 import type { WalletReportData } from "@/lib/wallet-report";
 
@@ -233,9 +234,19 @@ export function AdminPaymentsClient() {
 }
 
 export function AdminOffersClient() {
-  const result = useAdminPageData<{ offers: Offer[] }>("key=offers");
+  const result = useAdminPageData<{
+    offers: Offer[];
+    policy: StoreDiscountPolicy | null;
+    storeManager: boolean;
+  }>("key=offers");
   if (!result.data) return <PageState {...result} />;
-  return <AdminOffers initialOffers={result.data.offers} />;
+  return (
+    <AdminOffers
+      initialOffers={result.data.offers}
+      policy={result.data.policy}
+      storeManager={result.data.storeManager}
+    />
+  );
 }
 
 export function AdminReferralsClient() {
@@ -325,6 +336,7 @@ export function AdminStoreCreateClient() {
   const result = useAdminPageData<{
     states: SetupState[];
     cities: SetupCity[];
+    canManageDiscountPolicy: boolean;
   }>("key=store-create", 60_000);
   if (!result.data) return <PageState {...result} />;
   return (
@@ -332,17 +344,27 @@ export function AdminStoreCreateClient() {
       mode="create"
       locationStates={result.data.states}
       locationCities={result.data.cities}
+      canManageDiscountPolicy={result.data.canManageDiscountPolicy}
     />
   );
 }
 
 export function AdminStoreEditClient() {
   const { id } = useParams<{ id: string }>();
-  const result = useAdminPageData<{ store: Store }>(
+  const result = useAdminPageData<{
+    store: Store;
+    canManageDiscountPolicy: boolean;
+  }>(
     `key=store-edit&id=${encodeURIComponent(id)}`,
   );
   if (!result.data) return <PageState {...result} />;
-  return <StoreForm mode="edit" store={result.data.store} />;
+  return (
+    <StoreForm
+      mode="edit"
+      store={result.data.store}
+      canManageDiscountPolicy={result.data.canManageDiscountPolicy}
+    />
+  );
 }
 
 export function AdminStoreDetailsClient() {

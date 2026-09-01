@@ -2,6 +2,12 @@ import { pool } from "@/lib/db";
 
 export type StoreStatus = "active" | "draft" | "inactive";
 
+export type StoreDiscountPolicy = {
+  discountsEnabled: boolean;
+  maxDiscountPercent: number;
+  maxDiscountAmount: number;
+};
+
 export type Store = {
   id: string;
   storeNumber: number;
@@ -26,6 +32,9 @@ export type Store = {
   pinCode: string;
   latitude: string;
   longitude: string;
+  discountsEnabled: boolean;
+  maxDiscountPercent: number;
+  maxDiscountAmount: number;
   status: StoreStatus;
   createdAt: string;
   updatedAt: string;
@@ -52,6 +61,9 @@ export type StorePayload = {
   pinCode: string;
   latitude: string;
   longitude: string;
+  discountsEnabled: boolean;
+  maxDiscountPercent: number;
+  maxDiscountAmount: number;
   status: StoreStatus;
 };
 
@@ -78,6 +90,9 @@ type StoreRow = {
   pin_code: string;
   latitude: string;
   longitude: string;
+  discounts_enabled: boolean;
+  max_discount_percent: string;
+  max_discount_amount: string;
   status: StoreStatus;
   created_at: Date;
   updated_at: Date;
@@ -106,6 +121,9 @@ const storeColumns = `
   pin_code,
   latitude,
   longitude,
+  discounts_enabled,
+  max_discount_percent,
+  max_discount_amount,
   status,
   created_at,
   updated_at
@@ -140,6 +158,9 @@ function mapStore(row: StoreRow): Store {
     pinCode: row.pin_code,
     latitude: row.latitude,
     longitude: row.longitude,
+    discountsEnabled: row.discounts_enabled,
+    maxDiscountPercent: Number(row.max_discount_percent),
+    maxDiscountAmount: Number(row.max_discount_amount),
     status: row.status,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
@@ -150,6 +171,9 @@ export function normalizeStorePayload(input: Partial<StorePayload>): StorePayloa
   const status = input.status === "draft" || input.status === "inactive"
     ? input.status
     : "active";
+  const discountsEnabled = input.discountsEnabled === true;
+  const maxDiscountPercent = Number(input.maxDiscountPercent ?? 0);
+  const maxDiscountAmount = Number(input.maxDiscountAmount ?? 0);
 
   return {
     name: input.name?.trim() ?? "",
@@ -172,6 +196,9 @@ export function normalizeStorePayload(input: Partial<StorePayload>): StorePayloa
     pinCode: input.pinCode?.trim() ?? "",
     latitude: input.latitude?.trim() ?? "",
     longitude: input.longitude?.trim() ?? "",
+    discountsEnabled,
+    maxDiscountPercent: discountsEnabled ? maxDiscountPercent : 0,
+    maxDiscountAmount: discountsEnabled ? maxDiscountAmount : 0,
     status,
   };
 }
@@ -195,6 +222,17 @@ export function validateStorePayload(payload: StorePayload) {
     return "Enter a 10-digit mobile number.";
   }
 
+  if (payload.discountsEnabled &&
+      (!Number.isFinite(payload.maxDiscountPercent) ||
+        payload.maxDiscountPercent <= 0 || payload.maxDiscountPercent > 100)) {
+    return "Maximum discount must be between 1% and 100%.";
+  }
+
+  if (payload.discountsEnabled &&
+      (!Number.isFinite(payload.maxDiscountAmount) || payload.maxDiscountAmount <= 0)) {
+    return "Enter a maximum discount amount.";
+  }
+
   const durationFields = [
     ["Process time", payload.processTime],
     ["Delivery time", payload.tagDeliveryDateInterval],
@@ -209,7 +247,25 @@ export function validateStorePayload(payload: StorePayload) {
   return null;
 }
 
+let storeDiscountSetupPromise: Promise<void> | null = null;
+
+export function ensureStoreDiscountPolicySchema() {
+  if (!storeDiscountSetupPromise) {
+    storeDiscountSetupPromise = pool.query(`
+      ALTER TABLE stores
+        ADD COLUMN IF NOT EXISTS discounts_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS max_discount_percent NUMERIC(5,2) NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS max_discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+    `).then(() => undefined).catch((error) => {
+      storeDiscountSetupPromise = null;
+      throw error;
+    });
+  }
+  return storeDiscountSetupPromise;
+}
+
 export async function listStores() {
+  await ensureStoreDiscountPolicySchema();
   const { rows } = await pool.query<StoreRow>(
     `SELECT ${storeColumns}
      FROM stores
@@ -220,6 +276,7 @@ export async function listStores() {
 }
 
 export async function getStoreById(id: string) {
+  await ensureStoreDiscountPolicySchema();
   const { rows } = await pool.query<StoreRow>(
     `SELECT ${storeColumns}
      FROM stores
@@ -232,6 +289,7 @@ export async function getStoreById(id: string) {
 }
 
 export async function createStore(payload: StorePayload) {
+  await ensureStoreDiscountPolicySchema();
   const { rows } = await pool.query<StoreRow>(
     `INSERT INTO stores (
       name,
@@ -254,11 +312,14 @@ export async function createStore(payload: StorePayload) {
       pin_code,
       latitude,
       longitude,
+      discounts_enabled,
+      max_discount_percent,
+      max_discount_amount,
       status
     )
     VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-      $16, $17, $18, $19, $20, $21
+      $16, $17, $18, $19, $20, $21, $22, $23, $24
     )
     RETURNING ${storeColumns}`,
     [
@@ -282,6 +343,9 @@ export async function createStore(payload: StorePayload) {
       payload.pinCode,
       payload.latitude,
       payload.longitude,
+      payload.discountsEnabled,
+      payload.maxDiscountPercent,
+      payload.maxDiscountAmount,
       payload.status,
     ],
   );
@@ -290,6 +354,7 @@ export async function createStore(payload: StorePayload) {
 }
 
 export async function updateStore(id: string, payload: StorePayload) {
+  await ensureStoreDiscountPolicySchema();
   const { rows } = await pool.query<StoreRow>(
     `UPDATE stores
      SET
@@ -313,7 +378,10 @@ export async function updateStore(id: string, payload: StorePayload) {
       pin_code = $19,
       latitude = $20,
       longitude = $21,
-      status = $22
+      discounts_enabled = $22,
+      max_discount_percent = $23,
+      max_discount_amount = $24,
+      status = $25
      WHERE id = $1
      RETURNING ${storeColumns}`,
     [
@@ -338,6 +406,9 @@ export async function updateStore(id: string, payload: StorePayload) {
       payload.pinCode,
       payload.latitude,
       payload.longitude,
+      payload.discountsEnabled,
+      payload.maxDiscountPercent,
+      payload.maxDiscountAmount,
       payload.status,
     ],
   );
@@ -346,11 +417,30 @@ export async function updateStore(id: string, payload: StorePayload) {
 }
 
 export async function updateStoreStatus(id: string, status: StoreStatus) {
+  await ensureStoreDiscountPolicySchema();
   const { rows } = await pool.query<StoreRow>(
     `UPDATE stores SET status = $2 WHERE id = $1 RETURNING ${storeColumns}`,
     [id, status],
   );
   return rows[0] ? mapStore(rows[0]) : null;
+}
+
+export async function getStoreDiscountPolicy(id: string): Promise<StoreDiscountPolicy | null> {
+  await ensureStoreDiscountPolicySchema();
+  const { rows } = await pool.query<{
+    discounts_enabled: boolean;
+    max_discount_percent: string;
+    max_discount_amount: string;
+  }>(
+    `SELECT discounts_enabled, max_discount_percent, max_discount_amount
+     FROM stores WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  return rows[0] ? {
+    discountsEnabled: rows[0].discounts_enabled,
+    maxDiscountPercent: Number(rows[0].max_discount_percent),
+    maxDiscountAmount: Number(rows[0].max_discount_amount),
+  } : null;
 }
 
 export async function deleteStore(id: string) {

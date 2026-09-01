@@ -19,6 +19,7 @@ import { getPaymentStats, listPayments } from "@/lib/payments";
 import { getPickupStats, listPickupRiders, listPickupTasks } from "@/lib/pickups";
 import { listReferrals } from "@/lib/referrals";
 import {
+  canAccessAdminPage,
   listRolePermissionAssignments,
   permissionGroups,
 } from "@/lib/role-permissions";
@@ -30,7 +31,7 @@ import { listItemCategories, listItems, listServices } from "@/lib/item-master";
 import { listRateCardGroups, listRateCardStoreAssignments } from "@/lib/rate-card-groups";
 import { getCurrentUser } from "@/lib/session";
 import { listStoreTeamMembers } from "@/lib/store-team";
-import { getStoreById, listStores } from "@/lib/stores";
+import { getStoreById, getStoreDiscountPolicy, listStores } from "@/lib/stores";
 import { getComplaintStats, listComplaints } from "@/lib/support";
 import { getWalletReport } from "@/lib/wallet-report";
 
@@ -57,11 +58,31 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const key = url.searchParams.get("key") ?? "";
   const id = url.searchParams.get("id") ?? "";
+  const permissionKeyByPage: Record<string, string> = {
+    dashboard: "dashboard",
+    orders: "orders",
+    "order-detail": "orders",
+    customers: "customers",
+    pickups: "pickups",
+    deliveries: "deliveries",
+    inventory: "inventory",
+    riders: "riders",
+    "rider-detail": "riders",
+    payments: "payments",
+    offers: "offers",
+    complaints: "complaints",
+    reports: "reports",
+    "operational-report": "reports",
+  };
+  const permissionKey = permissionKeyByPage[key];
+  if (permissionKey && !(await canAccessAdminPage(user, permissionKey))) {
+    return NextResponse.json({ message: "You do not have access to this page." }, { status: 403 });
+  }
   if (user.role === "store_manager" &&
       ![
         "dashboard", "orders", "order-detail", "customers", "pickups", "deliveries",
         "inventory", "riders", "rider-detail", "payments", "complaints", "reports",
-        "operational-report", "profile",
+        "operational-report", "offers", "profile",
       ].includes(key)) {
     return NextResponse.json({ message: "This page is not available to a store manager." }, { status: 403 });
   }
@@ -88,6 +109,7 @@ export async function GET(request: Request) {
         cities: cities.filter(
           (city) => city.isActive && activeStateIds.has(city.stateId),
         ),
+        canManageDiscountPolicy: user.role === "admin",
       });
     }
     case "store-detail": {
@@ -110,7 +132,7 @@ export async function GET(request: Request) {
       if (!store) {
         return NextResponse.json({ message: "Store not found." }, { status: 404 });
       }
-      return response({ store });
+      return response({ store, canManageDiscountPolicy: user.role === "admin" });
     }
     case "orders": {
       const [orders, stats] = await Promise.all([
@@ -195,8 +217,16 @@ export async function GET(request: Request) {
       ]);
       return response({ payments, stats });
     }
-    case "offers":
-      return response({ offers: await listOffers() });
+    case "offers": {
+      if (user.role === "store_manager" && user.storeId) {
+        return response({
+          offers: await listOffers(false, user.storeId),
+          policy: await getStoreDiscountPolicy(user.storeId),
+          storeManager: true,
+        });
+      }
+      return response({ offers: await listOffers(), policy: null, storeManager: false });
+    }
     case "referrals":
       return response({ referrals: await listReferrals() });
     case "complaints": {

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { startNavigationProgress } from "@/components/navigation-loader";
 import type { SetupCity, SetupState } from "@/lib/locations";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ type StoreFormProps = {
   store?: Store;
   locationStates?: SetupState[];
   locationCities?: SetupCity[];
+  canManageDiscountPolicy?: boolean;
 };
 
 type FieldProps = {
@@ -230,6 +232,7 @@ function getDurationValue(formData: FormData, name: DurationFieldName) {
 
 function getStorePayload(formData: FormData): StorePayload {
   const status = getFormValue(formData, "status");
+  const discountsEnabled = formData.get("discountsEnabled") === "true";
 
   return {
     name: getFormValue(formData, "name"),
@@ -255,6 +258,13 @@ function getStorePayload(formData: FormData): StorePayload {
     pinCode: getFormValue(formData, "pinCode"),
     latitude: getFormValue(formData, "latitude"),
     longitude: getFormValue(formData, "longitude"),
+    discountsEnabled,
+    maxDiscountPercent: discountsEnabled
+      ? Number(formData.get("maxDiscountPercent"))
+      : 0,
+    maxDiscountAmount: discountsEnabled
+      ? Number(formData.get("maxDiscountAmount"))
+      : 0,
     status: status === "draft" || status === "inactive" ? status : "active",
   };
 }
@@ -274,6 +284,7 @@ export function StoreForm({
   store,
   locationStates = [],
   locationCities = [],
+  canManageDiscountPolicy = false,
 }: StoreFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -286,6 +297,9 @@ export function StoreForm({
   );
   const [invoiceNumber, setInvoiceNumber] = useState(
     store?.invoiceGenNumber || generatedInvoiceNumber,
+  );
+  const [discountsEnabled, setDiscountsEnabled] = useState(
+    store?.discountsEnabled ?? false,
   );
   const invoiceNameEdited = useRef(
     Boolean(store?.invoiceGenName && store.invoiceGenName !== initialStoreName),
@@ -536,8 +550,68 @@ export function StoreForm({
             </div>
           </SectionCard>
 
+          {canManageDiscountPolicy ? (
+            <SectionCard number={5} title="Discount Limit">
+              <input
+                type="hidden"
+                name="discountsEnabled"
+                value={discountsEnabled ? "true" : "false"}
+              />
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-[#31405A]">
+                  Allow Store Discounts
+                </span>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={discountsEnabled}
+                    onCheckedChange={setDiscountsEnabled}
+                    aria-label="Allow store discounts"
+                  />
+                  <span className="w-7 text-xs text-[#52627A]">
+                    {discountsEnabled ? "Yes" : "No"}
+                  </span>
+                </div>
+              </div>
+              {discountsEnabled ? (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[#31405A]">
+                      Max Discount (%)
+                    </span>
+                    <Input
+                      name="maxDiscountPercent"
+                      type="number"
+                      inputMode="decimal"
+                      min="1"
+                      max="100"
+                      step="0.01"
+                      required
+                      defaultValue={store?.maxDiscountPercent || 20}
+                      className="h-[36px] rounded border-[#DCE6F2] text-sm shadow-none"
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[#31405A]">
+                      Max Amount (₹)
+                    </span>
+                    <Input
+                      name="maxDiscountAmount"
+                      type="number"
+                      inputMode="decimal"
+                      min="1"
+                      step="0.01"
+                      required
+                      defaultValue={store?.maxDiscountAmount || 200}
+                      className="h-[36px] rounded border-[#DCE6F2] text-sm shadow-none"
+                    />
+                  </label>
+                </div>
+              ) : null}
+            </SectionCard>
+          ) : null}
+
           <SectionCard
-            number={5}
+            number={canManageDiscountPolicy ? 6 : 5}
             title="Notifications & Notes"
           >
             <TextAreaField

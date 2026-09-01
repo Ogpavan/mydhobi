@@ -260,24 +260,39 @@ export function AdminOrderDetails({ initialOrder }: { initialOrder: AdminOrder }
   const nextStatuses = allowedOrderTransitions[order.status];
 
   async function updateStatus(status: PortalOrderStatus) {
-    setSaving(status);
-    const response = await fetch(`/api/admin/orders/${order.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, note }),
-    });
-    const data = (await response.json()) as {
-      order?: AdminOrder;
-      message?: string;
-    };
-    setSaving(null);
-    if (!response.ok || !data.order) {
-      toast.error(data.message ?? "Unable to update order");
+    if (
+      ["Cancelled", "Delivered"].includes(status) &&
+      !window.confirm(
+        status === "Cancelled"
+          ? "Cancel this order? Paid money will be returned to the customer's wallet."
+          : "Mark this order delivered?",
+      )
+    ) {
       return;
     }
-    setOrder(data.order);
-    setNote("");
-    toast.success(`Order marked ${status}`);
+    setSaving(status);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, note }),
+      });
+      const data = (await response.json()) as {
+        order?: AdminOrder;
+        message?: string;
+      };
+      if (!response.ok || !data.order) {
+        toast.error(data.message ?? "Unable to update order");
+        return;
+      }
+      setOrder(data.order);
+      setNote("");
+      toast.success(`Order marked ${status}`);
+    } catch {
+      toast.error("Unable to update order. Check your connection and try again.");
+    } finally {
+      setSaving(null);
+    }
   }
 
   return (
@@ -328,8 +343,24 @@ export function AdminOrderDetails({ initialOrder }: { initialOrder: AdminOrder }
                   ))}
                   <TableRow>
                     <TableCell colSpan={3} className="font-semibold">
-                      Total
+                      Subtotal
                     </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      ₹{order.subtotal.toLocaleString("en-IN")}
+                    </TableCell>
+                  </TableRow>
+                  {order.discountAmount > 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-[#0C9E78]">
+                        Discount{order.couponCode ? ` (${order.couponCode})` : ""}
+                      </TableCell>
+                      <TableCell className="text-right text-[#0C9E78]">
+                        -₹{order.discountAmount.toLocaleString("en-IN")}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  <TableRow>
+                    <TableCell colSpan={3} className="font-semibold">Total</TableCell>
                     <TableCell className="text-right font-semibold">
                       ₹{order.amount.toLocaleString("en-IN")}
                     </TableCell>

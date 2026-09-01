@@ -34,7 +34,15 @@ type NavItem = {
 const navItems: NavItem[] = [
   { key: "dashboard", title: "Dashboard", href: "/admin/dashboard" },
   { key: "store", title: "Store", href: "/admin/store" },
-  { key: "orders", title: "Orders", href: "/admin/orders" },
+  {
+    key: "orders",
+    title: "Orders",
+    href: "/admin/orders",
+    children: [
+      { title: "Book new order", href: "/admin/orders/new" },
+      { title: "List order", href: "/admin/orders" },
+    ],
+  },
   { key: "customers", title: "Customers", href: "/admin/customers" },
   { key: "pickups", title: "Pickups", href: "/admin/pickups" },
   { key: "deliveries", title: "Deliveries", href: "/admin/deliveries" },
@@ -119,6 +127,7 @@ type AdminSidebarProps = {
   showRolePermissions?: boolean;
   storeManager?: boolean;
   sidebarItems?: SidebarSetting[];
+  allowedPageKeys?: string[];
 };
 
 export function AdminSidebar({
@@ -132,6 +141,7 @@ export function AdminSidebar({
     label: item.defaultLabel,
     iconUrl: null,
   })),
+  allowedPageKeys,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const { open, setOpen } = useSidebar();
@@ -142,12 +152,34 @@ export function AdminSidebar({
       .map((item) => item.href),
   );
   const isCollapsed = collapsible && !open;
-  const visibleNavItems = storeManager
+  const roleVisibleNavItems = storeManager
     ? navItems.filter((item) => [
       "dashboard", "orders", "customers", "pickups", "deliveries", "inventory",
-      "riders", "payments", "complaints", "reports", "settings",
+      "riders", "payments", "offers", "complaints", "reports", "settings",
     ].includes(item.key))
     : navItems;
+  const permissionKeyByNav: Partial<Record<SidebarItemKey, string>> = {
+    dashboard: "dashboard",
+    store: "stores",
+    orders: "orders",
+    customers: "customers",
+    pickups: "pickups",
+    deliveries: "deliveries",
+    services: "services",
+    inventory: "inventory",
+    riders: "riders",
+    payments: "payments",
+    offers: "offers",
+    referrals: "referrals",
+    complaints: "complaints",
+    reports: "reports",
+  };
+  const visibleNavItems = allowedPageKeys
+    ? roleVisibleNavItems.filter((item) => {
+        const permissionKey = permissionKeyByNav[item.key];
+        return !permissionKey || allowedPageKeys.includes(permissionKey);
+      })
+    : roleVisibleNavItems;
 
   useEffect(() => {
     const activeGroup = navItems.find(
@@ -242,7 +274,12 @@ export function AdminSidebar({
             const isExpanded = openGroups.includes(item.href) && !isCollapsed;
             const visibleChildren = item.children.filter(
               (child) => (!child.adminOnly || showRolePermissions || storeManagerReportPaths.has(child.href)) &&
-                (!storeManager || child.href === "/admin/settings/profile" || storeManagerReportPaths.has(child.href)),
+                (!storeManager ||
+                  (item.key === "reports"
+                    ? storeManagerReportPaths.has(child.href)
+                    : item.key === "settings"
+                      ? child.href === "/admin/settings/profile"
+                      : true)),
             );
 
             return (

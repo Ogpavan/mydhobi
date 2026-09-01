@@ -180,7 +180,7 @@ export function CustomerScheduleClient() {
   if (addresses.error) return <CustomerPageError message={addresses.error} retry={addresses.retry} />;
   const address = addresses.data?.addresses[0];
   const pickupAddress = address ? [address.fullAddress, address.landmark, address.city, address.pincode].filter(Boolean).join(", ") : "";
-  return <SchedulePickupView dates={dates} pickupAddress={pickupAddress} />;
+  return <SchedulePickupView dates={dates} pickupAddress={pickupAddress} pickupAddressId={address?.id ?? ""} />;
 }
 
 export function CustomerTrackClient() {

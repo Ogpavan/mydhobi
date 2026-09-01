@@ -35,9 +35,11 @@ const slotStartHour: Record<string, number> = {
 export function SchedulePickupView({
   dates,
   pickupAddress,
+  pickupAddressId,
 }: {
   dates: PickupDateOption[];
   pickupAddress: string;
+  pickupAddressId: string;
 }) {
   const [selectedDate, setSelectedDate] = useState(dates[0]?.id ?? "");
   const [selectedTime, setSelectedTime] = useState(timeSlots[0]);
@@ -59,6 +61,7 @@ export function SchedulePickupView({
     localStorage.setItem("mydhobi_pickup_at", pickup.toISOString());
     localStorage.setItem("mydhobi_pickup_instructions", instructions.trim());
     localStorage.setItem("mydhobi_checkout_address", pickupAddress);
+    localStorage.setItem("mydhobi_checkout_address_id", pickupAddressId);
     toast.success("Pickup time saved");
     startNavigationProgress();
     router.push("/customer/services");

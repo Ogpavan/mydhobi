@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/session";
 import {
+  deactivateStoreOffersOutsidePolicy,
+} from "@/lib/offers";
+import {
   deleteStore,
   getStoreById,
   normalizeStorePayload,
@@ -54,9 +57,18 @@ export async function PATCH(request: Request, { params }: StoreRouteContext) {
       const store = await updateStoreStatus(id, requestBody.status);
       return store ? NextResponse.json({ store }) : NextResponse.json({ message: "Store not found." }, { status: 404 });
     }
+    const currentStore = await getStoreById(id);
+    if (!currentStore) {
+      return NextResponse.json({ message: "Store not found." }, { status: 404 });
+    }
     const payload = normalizeStorePayload(
       requestBody as Parameters<typeof normalizeStorePayload>[0],
     );
+    if (user.role !== "admin") {
+      payload.discountsEnabled = currentStore.discountsEnabled;
+      payload.maxDiscountPercent = currentStore.maxDiscountPercent;
+      payload.maxDiscountAmount = currentStore.maxDiscountAmount;
+    }
     const error = validateStorePayload(payload);
 
     if (error) {
@@ -67,6 +79,14 @@ export async function PATCH(request: Request, { params }: StoreRouteContext) {
 
     if (!store) {
       return NextResponse.json({ message: "Store not found." }, { status: 404 });
+    }
+
+    if (user.role === "admin") {
+      await deactivateStoreOffersOutsidePolicy(id, {
+        discountsEnabled: store.discountsEnabled,
+        maxDiscountPercent: store.maxDiscountPercent,
+        maxDiscountAmount: store.maxDiscountAmount,
+      });
     }
 
     return NextResponse.json({ store });

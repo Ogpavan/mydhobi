@@ -422,7 +422,8 @@ export async function getCustomerItemPrice(garmentId: number, serviceId: number,
   await ensureItemMasterSchema();
   const resolvedStoreId = await resolveCatalogStoreId(storeId);
   const { rows } = await pool.query<Record<string, unknown>>(
-    `SELECT COALESCE(gr.price,t.price,m.price) AS price,
+    `SELECT g.name AS garment_name,s.name AS service_name,
+      COALESCE(gr.price,t.price,m.price) AS price,
       COALESCE(gr.pricing_unit,m.pricing_unit) AS pricing_unit,
       COALESCE(gr.turnaround_hours,m.turnaround_hours) AS turnaround_hours,
       COALESCE(gr.express_available,m.express_available) AS express_available,
@@ -441,6 +442,8 @@ export async function getCustomerItemPrice(garmentId: number, serviceId: number,
   );
   if (!rows[0]) return null;
   return {
+    garmentName: String(rows[0].garment_name),
+    serviceName: String(rows[0].service_name),
     price: Number(rows[0].price),
     pricingUnit: normalizePricingUnit(rows[0].pricing_unit),
     turnaroundHours: Number(rows[0].turnaround_hours),

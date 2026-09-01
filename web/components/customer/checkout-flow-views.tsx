@@ -16,7 +16,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { CustomerSimpleHeader } from "@/components/customer/customer-simple-header";
@@ -85,6 +85,10 @@ export function ServiceDetailsView({ service }: { service: CatalogService }) {
         quantity,
         unitPrice,
         image,
+        garmentId: service.garmentId,
+        garmentName: service.garmentName,
+        serviceId: service.id,
+        serviceName: service.name,
         service: service.name,
         serviceSlug: service.slug,
       })),
@@ -218,6 +222,7 @@ export function AddressesView({ addresses }: { addresses: PortalAddress[] }) {
   const [selected, setSelected] = useState(addresses[0]?.id ?? "");
   function selectAddress(address: PortalAddress) {
     setSelected(address.id);
+    localStorage.setItem("mydhobi_checkout_address_id", address.id);
     localStorage.setItem(
       "mydhobi_checkout_address",
       [address.fullAddress, address.landmark, address.city, address.pincode].filter(Boolean).join(", "),
@@ -229,7 +234,11 @@ export function AddressesView({ addresses }: { addresses: PortalAddress[] }) {
     if(!request.ok){toast.error("Unable to delete address");return;}
     const next=addressList.filter(item=>item.id!==id);setAddressList(next);
     invalidateCustomerData("/api/customer/addresses", "/api/customer/home");
-    if(selected===id)setSelected(next[0]?.id??"");
+    if(selected===id){
+      setSelected(next[0]?.id??"");
+      localStorage.removeItem("mydhobi_checkout_address_id");
+      localStorage.removeItem("mydhobi_checkout_address");
+    }
     toast.success("Address deleted");
   }
   return (
@@ -288,28 +297,48 @@ export function PaymentView({ walletBalance }: { walletBalance: number }) {
   const [isPaying, setIsPaying] = useState(false);
   const [total,setTotal]=useState(0);
   const [cart,setCart]=useState<CustomerCart|null>(null);
+  const orderRequestKey = useRef("");
   const router = useRouter();
   useEffect(()=>{const current=readCustomerCart();setCart(current);const saved=Number(localStorage.getItem("mydhobi_discount")??0);setTotal(Math.max(0,cartSubtotal(current)-(Number.isFinite(saved)?saved:0)));},[]);
-  const methods = [{ label: "UPI", detail: "Google Pay, PhonePe etc.", icon: CreditCard }, { label: "Wallet", detail: `Available balance: ₹${walletBalance.toFixed(2)}`, icon: WalletCards }, { label: "Debit / Credit Card", detail: "Visa, Mastercard, RuPay", icon: CreditCard }, { label: "Cash on Delivery", detail: "Pay when we deliver", icon: WalletCards }];
+  const methods = [{ label: "UPI", detail: "Payment will be confirmed by staff", icon: CreditCard }, { label: "Wallet", detail: `Available balance: ₹${walletBalance.toFixed(2)}`, icon: WalletCards }, { label: "Debit / Credit Card", detail: "Payment will be confirmed by staff", icon: CreditCard }, { label: "Cash on Delivery", detail: "Pay when we deliver", icon: WalletCards }];
   async function placeOrder() {
     if(!cart){toast.error("Your cart is empty");startNavigationProgress();router.push("/customer/services");return;}
+    if (cart.items.some((item) => !item.garmentId || !item.serviceId)) {
+      toast.error("Please choose your garments again.");
+      writeCustomerCart(null);
+      startNavigationProgress();
+      router.push("/customer/services");
+      return;
+    }
     const checkoutAddress=localStorage.getItem("mydhobi_checkout_address");
-    if(!checkoutAddress){toast.error("Select a pickup address");startNavigationProgress();router.push("/customer/addresses");return;}
+    const checkoutAddressId=localStorage.getItem("mydhobi_checkout_address_id");
+    if(!checkoutAddress || !checkoutAddressId){toast.error("Select a pickup address");startNavigationProgress();router.push("/customer/addresses");return;}
     setIsPaying(true);
     const savedPickup = localStorage.getItem("mydhobi_pickup_at");
     const pickup = savedPickup ? new Date(savedPickup) : new Date();
-    if (!savedPickup) {
+    if (
+      !savedPickup ||
+      Number.isNaN(pickup.getTime()) ||
+      pickup.getTime() < Date.now() + 30 * 60 * 1000 ||
+      pickup.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000
+    ) {
+      pickup.setTime(Date.now());
       pickup.setDate(pickup.getDate() + 1);
       pickup.setHours(10, 0, 0, 0);
     }
-    const response = await fetch("/api/customer/orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    if (!orderRequestKey.current) orderRequestKey.current = crypto.randomUUID();
+    try {
+      const response = await fetch("/api/customer/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": orderRequestKey.current,
+        },
+        body: JSON.stringify({
         service: cart.service,
         pickupAt: pickup.toISOString(),
         paymentMethod: method === "Wallet" ? "wallet" : method === "Cash on Delivery" ? "cash" : method === "Debit / Credit Card" ? "card" : "upi",
-        address: checkoutAddress,
+        addressId: checkoutAddressId,
         instructions: localStorage.getItem("mydhobi_pickup_instructions") ?? "",
         couponCode: localStorage.getItem("mydhobi_coupon") ?? "",
         items: cart.items.map((item)=>({
@@ -326,28 +355,32 @@ export function PaymentView({ walletBalance }: { walletBalance: number }) {
           fabric: item.fabric,
           defect: item.defect,
         })),
-      }),
-    });
-    const data = await response.json() as { order?: { id: string }; message?: string };
-    if (!response.ok || !data.order) {
-      toast.error(data.message ?? "Unable to place order");
+        }),
+      });
+      const data = await response.json() as { order?: { id: string }; message?: string };
+      if (!response.ok || !data.order) {
+        toast.error(data.message ?? "Unable to place order");
+        return;
+      }
+      invalidateCustomerData(
+        "/api/customer/orders",
+        "/api/customer/wallet",
+        "/api/customer/notifications",
+        "/api/customer/home",
+      );
+      startNavigationProgress();
+      localStorage.removeItem("mydhobi_coupon");
+      localStorage.removeItem("mydhobi_discount");
+      writeCustomerCart(null);
+      router.push(`/customer/order-success?order=${encodeURIComponent(data.order.id)}`);
+    } catch {
+      toast.error("Unable to place order. Check your connection and try again.");
+    } finally {
       setIsPaying(false);
-      return;
     }
-    invalidateCustomerData(
-      "/api/customer/orders",
-      "/api/customer/wallet",
-      "/api/customer/notifications",
-      "/api/customer/home",
-    );
-    startNavigationProgress();
-    localStorage.removeItem("mydhobi_coupon");
-    localStorage.removeItem("mydhobi_discount");
-    writeCustomerCart(null);
-    router.push(`/customer/order-success?order=${encodeURIComponent(data.order.id)}`);
   }
   return (
-    <div className="min-h-screen bg-[#fafafe] pb-24 text-[#17182c]"><CustomerSimpleHeader title="Payment Method" backHref="/customer/addresses" /><main className="mx-auto max-w-[720px] space-y-3 px-4 py-4">{methods.map((item) => { const Icon=item.icon; return <button key={item.label} type="button" onClick={() => setMethod(item.label)} className={cn("flex w-full items-center gap-3 rounded-[12px] border bg-white px-3 py-3 text-left", method===item.label ? "border-[#8a50ee] bg-[#fbf9ff]" : "border-[#e5e2eb]")}><span className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-[#f0eaff] text-[#7440dc]"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block text-[11px] font-bold">{item.label}</span><span className="mt-1 block text-[9px] text-[#77798a]">{item.detail}</span></span><span className={cn("h-4 w-4 rounded-full border-2", method===item.label ? "border-[#7440dc] bg-[#7440dc] shadow-[inset_0_0_0_3px_white]" : "border-[#c8c7d1]")} /></button>})}</main><div className="fixed inset-x-0 bottom-0 bg-white p-3"><button type="button" disabled={isPaying||!cart} onClick={placeOrder} className="mx-auto flex h-12 w-full max-w-[720px] items-center justify-center rounded-[12px] bg-[#7440dc] text-[12px] font-bold text-white disabled:opacity-60">{isPaying ? "Placing Order..." : cart?`Pay ₹${total}`:"Cart is Empty"}</button></div></div>
+    <div className="min-h-screen bg-[#fafafe] pb-24 text-[#17182c]"><CustomerSimpleHeader title="Payment Method" backHref="/customer/addresses" /><main className="mx-auto max-w-[720px] space-y-3 px-4 py-4">{methods.map((item) => { const Icon=item.icon; return <button key={item.label} type="button" onClick={() => setMethod(item.label)} className={cn("flex w-full items-center gap-3 rounded-[12px] border bg-white px-3 py-3 text-left", method===item.label ? "border-[#8a50ee] bg-[#fbf9ff]" : "border-[#e5e2eb]")}><span className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-[#f0eaff] text-[#7440dc]"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block text-[11px] font-bold">{item.label}</span><span className="mt-1 block text-[9px] text-[#77798a]">{item.detail}</span></span><span className={cn("h-4 w-4 rounded-full border-2", method===item.label ? "border-[#7440dc] bg-[#7440dc] shadow-[inset_0_0_0_3px_white]" : "border-[#c8c7d1]")} /></button>})}</main><div className="fixed inset-x-0 bottom-0 bg-white p-3"><button type="button" disabled={isPaying||!cart} onClick={placeOrder} className="mx-auto flex h-12 w-full max-w-[720px] items-center justify-center rounded-[12px] bg-[#7440dc] text-[12px] font-bold text-white disabled:opacity-60">{isPaying ? "Placing Order..." : cart ? method === "Wallet" ? `Pay ₹${total}` : `Place Order · ₹${total}` : "Cart is Empty"}</button></div></div>
   );
 }
 

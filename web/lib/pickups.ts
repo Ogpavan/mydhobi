@@ -1,5 +1,7 @@
 import { pool } from "@/lib/db";
 import { ensureCustomerPortalSchema } from "@/lib/customer-portal";
+import { applyOrderStatusTransition } from "@/lib/order-workflow";
+import { ensureReferralSchema } from "@/lib/referrals";
 
 export const pickupStatuses = [
   "Scheduled",
@@ -7,6 +9,7 @@ export const pickupStatuses = [
   "Out for Pickup",
   "Completed",
   "Failed",
+  "Cancelled",
 ] as const;
 
 export type PickupStatus = (typeof pickupStatuses)[number];
@@ -117,6 +120,24 @@ export async function syncPickupTasks() {
     WHERE orders.status <> 'Cancelled'
     ON CONFLICT (order_id) DO NOTHING
   `);
+  await pool.query(`
+    UPDATE order_pickups pickups
+    SET status=CASE
+        WHEN orders.status='Cancelled' AND pickups.status <> 'Completed' THEN 'Cancelled'
+        WHEN orders.status IN ('Picked Up','In Cleaning','Ready','Out for Delivery','Delivered') THEN 'Completed'
+        ELSE pickups.status
+      END,
+      completed_at=CASE
+        WHEN orders.status IN ('Picked Up','In Cleaning','Ready','Out for Delivery','Delivered')
+          THEN COALESCE(pickups.completed_at,NOW())
+        ELSE pickups.completed_at
+      END,
+      updated_at=NOW()
+    FROM customer_orders orders
+    WHERE pickups.order_id=orders.id
+      AND ((orders.status='Cancelled' AND pickups.status NOT IN ('Completed','Cancelled'))
+        OR (orders.status IN ('Picked Up','In Cleaning','Ready','Out for Delivery','Delivered') AND pickups.status <> 'Completed'))
+  `);
 }
 
 function statusFromValue(value: unknown): PickupStatus {
@@ -188,9 +209,9 @@ export async function getPickupStats(storeId?: string | null): Promise<PickupSta
           AND pickups.scheduled_at < date_trunc('day',NOW()) + interval '1 day'
       )::int AS today,
       COUNT(*) FILTER (WHERE pickups.status='Completed')::int AS completed,
-      COUNT(*) FILTER (WHERE pickups.status NOT IN ('Completed','Failed'))::int AS pending,
+      COUNT(*) FILTER (WHERE pickups.status NOT IN ('Completed','Failed','Cancelled'))::int AS pending,
       COUNT(*) FILTER (
-        WHERE pickups.rider_id IS NULL AND pickups.status NOT IN ('Completed','Failed')
+        WHERE pickups.rider_id IS NULL AND pickups.status NOT IN ('Completed','Failed','Cancelled')
       )::int AS unassigned
     FROM order_pickups pickups
     INNER JOIN customer_orders orders ON orders.id=pickups.order_id
@@ -210,6 +231,7 @@ const pickupTransitions: Record<PickupStatus, PickupStatus[]> = {
   "Out for Pickup": ["Completed", "Failed"],
   Completed: [],
   Failed: ["Scheduled"],
+  Cancelled: [],
 };
 
 export async function updatePickupTask(
@@ -222,12 +244,13 @@ export async function updatePickupTask(
   },
   storeId?: string | null,
 ) {
-  await syncPickupTasks();
+  await Promise.all([syncPickupTasks(), ensureReferralSchema()]);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const currentResult = await client.query(
-      `SELECT pickups.*,orders.user_id,orders.status AS order_status
+      `SELECT pickups.*,orders.user_id,orders.status AS order_status,
+        orders.store_id AS order_store_id
        FROM order_pickups pickups
        INNER JOIN customer_orders orders ON orders.id=pickups.order_id
        WHERE pickups.id=$1 AND ($2::uuid IS NULL OR orders.store_id=$2) FOR UPDATE`,
@@ -238,6 +261,10 @@ export async function updatePickupTask(
       return { kind: "not_found" as const };
     }
     const current = currentResult.rows[0];
+    if (current.order_status === "Cancelled" || current.order_status === "Delivered") {
+      await client.query("ROLLBACK");
+      return { kind: "order_closed" as const };
+    }
     const currentStatus = statusFromValue(current.status);
     let nextStatus = input.status ?? currentStatus;
     const riderId = input.riderId ?? (
@@ -260,6 +287,18 @@ export async function updatePickupTask(
     ) {
       await client.query("ROLLBACK");
       return { kind: "rider_required" as const };
+    }
+    if (riderId) {
+      const rider = await client.query(
+        `SELECT id FROM riders
+         WHERE id=$1 AND status <> 'Off Duty'
+           AND store_id IS NOT DISTINCT FROM $2::uuid`,
+        [riderId, current.order_store_id],
+      );
+      if (!rider.rows[0]) {
+        await client.query("ROLLBACK");
+        return { kind: "invalid_rider" as const };
+      }
     }
 
     await client.query(
@@ -291,24 +330,17 @@ export async function updatePickupTask(
         );
       }
       if (nextStatus === "Completed" && current.order_status === "New") {
-        await client.query(
-          `UPDATE customer_orders SET status='Picked Up',updated_at=NOW()
-           WHERE id=$1`,
-          [current.order_id],
+        const orderResult = await applyOrderStatusTransition(
+          client,
+          String(current.order_id),
+          "Picked Up",
+          "Pickup completed",
+          storeId,
         );
-        await client.query(
-          `INSERT INTO customer_order_status_history (order_id,status,note)
-           VALUES ($1,'Picked Up','Pickup completed')`,
-          [current.order_id],
-        );
-        await client.query(
-          `INSERT INTO customer_notifications (user_id,title,message)
-           VALUES ($1,'Order Picked Up',$2)`,
-          [
-            current.user_id,
-            `Your clothes for order #${current.order_id} have been picked up.`,
-          ],
-        );
+        if (orderResult.kind !== "updated") {
+          await client.query("ROLLBACK");
+          return orderResult;
+        }
       }
     }
 

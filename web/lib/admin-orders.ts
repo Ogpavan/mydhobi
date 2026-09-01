@@ -5,10 +5,13 @@ import {
   type PortalOrder,
 } from "@/lib/customer-portal";
 import {
-  allowedOrderTransitions,
   orderStatuses,
   type PortalOrderStatus,
 } from "@/lib/order-lifecycle";
+import { allowedOrderTransitions } from "@/lib/order-lifecycle";
+import { applyOrderStatusTransition } from "@/lib/order-workflow";
+import { ensureReferralSchema } from "@/lib/referrals";
+import { ensurePaymentLedger } from "@/lib/payments";
 
 export { allowedOrderTransitions };
 
@@ -56,7 +59,8 @@ export async function listAdminOrders(storeId?: string | null) {
      FROM customer_orders orders
      INNER JOIN app_users users ON users.id=orders.user_id
      WHERE ($1::uuid IS NULL OR orders.store_id=$1)
-     ORDER BY orders.created_at DESC`,
+     ORDER BY orders.created_at DESC
+     LIMIT 500`,
     [storeId ?? null],
   );
 
@@ -130,47 +134,25 @@ export async function updateAdminOrderStatus(
   note: string,
   storeId?: string | null,
 ) {
-  await ensureCustomerPortalSchema();
+  await Promise.all([
+    ensureCustomerPortalSchema(),
+    ensureReferralSchema(),
+    ensurePaymentLedger(),
+  ]);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const currentResult = await client.query(
-      "SELECT user_id,status FROM customer_orders WHERE id=$1 AND ($2::uuid IS NULL OR store_id=$2) FOR UPDATE",
-      [id, storeId ?? null],
+    const result = await applyOrderStatusTransition(
+      client,
+      id,
+      nextStatus,
+      note,
+      storeId,
     );
-    if (!currentResult.rows[0]) {
+    if (result.kind !== "updated") {
       await client.query("ROLLBACK");
-      return { kind: "not_found" as const };
+      return result;
     }
-
-    const currentStatus = statusFromValue(currentResult.rows[0].status);
-    if (!allowedOrderTransitions[currentStatus].includes(nextStatus)) {
-      await client.query("ROLLBACK");
-      return { kind: "invalid_transition" as const, currentStatus };
-    }
-
-    await client.query(
-      `UPDATE customer_orders
-       SET status=$2::varchar,
-         delivery_at=CASE WHEN $2::varchar='Delivered' THEN NOW() ELSE delivery_at END,
-         updated_at=NOW()
-       WHERE id=$1`,
-      [id, nextStatus],
-    );
-    await client.query(
-      `INSERT INTO customer_order_status_history (order_id,status,note)
-       VALUES ($1,$2,$3)`,
-      [id, nextStatus, note],
-    );
-    await client.query(
-      `INSERT INTO customer_notifications (user_id,title,message)
-       VALUES ($1,$2,$3)`,
-      [
-        currentResult.rows[0].user_id,
-        `Order ${nextStatus}`,
-        `Order #${id} is now ${nextStatus.toLowerCase()}.`,
-      ],
-    );
     await client.query("COMMIT");
     return { kind: "updated" as const, order: await getAdminOrder(id, storeId) };
   } catch (error) {

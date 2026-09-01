@@ -1,4 +1,5 @@
 import { pool } from "@/lib/db";
+import type { AuthUser } from "@/lib/auth";
 import { ensureRoleTable } from "@/lib/roles";
 
 export type PermissionPage = {
@@ -58,6 +59,14 @@ export const permissionPageKeys = permissionGroups.flatMap((group) =>
   group.pages.map((page) => page.key),
 );
 
+const defaultManagerPages = new Set([
+  "dashboard", "orders", "pickups", "deliveries", "complaints", "customers",
+  "riders", "payments", "offers", "reports", "inventory",
+]);
+const defaultStaffPages = new Set([
+  "dashboard", "orders", "pickups", "deliveries", "complaints", "customers",
+]);
+
 const allowedPageKeys = new Set(permissionPageKeys);
 let setupPromise: Promise<void> | null = null;
 
@@ -67,6 +76,8 @@ export async function ensureRolePermissionsTable() {
   if (!setupPromise) {
     setupPromise = pool
       .query(`
+        ALTER TABLE setup_roles
+        ADD COLUMN IF NOT EXISTS permissions_configured BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE TABLE IF NOT EXISTS setup_role_permissions (
           role_id BIGINT NOT NULL REFERENCES setup_roles(id) ON DELETE CASCADE,
           page_key VARCHAR(100) NOT NULL,
@@ -116,6 +127,57 @@ export async function listRolePermissionAssignments() {
   }, {});
 }
 
+export async function getAllowedAdminPageKeys(
+  user: Pick<AuthUser, "id" | "role">,
+) {
+  if (user.role === "admin") return [...permissionPageKeys];
+  if (user.role === "customer") return [];
+  await ensureRolePermissionsTable();
+
+  const roleNameResult = user.role === "store_manager"
+    ? await pool.query<{ role: string }>(
+        `SELECT role FROM store_team_members
+         WHERE user_id=$1 AND status='active' LIMIT 1`,
+        [user.id],
+      )
+    : { rows: [{ role: "Staff" }] };
+  const roleName = roleNameResult.rows[0]?.role ?? "";
+  const roleResult = await pool.query<{
+    id: string;
+    is_active: boolean;
+    permissions_configured: boolean;
+  }>(
+    `SELECT id,is_active,permissions_configured FROM setup_roles
+     WHERE LOWER(name)=LOWER($1) LIMIT 1`,
+    [roleName],
+  );
+  const role = roleResult.rows[0];
+  if (role && !role.is_active) return [];
+
+  if (role) {
+    const permissions = await pool.query<{ page_key: string }>(
+      `SELECT page_key FROM setup_role_permissions
+       WHERE role_id=$1 ORDER BY page_key`,
+      [role.id],
+    );
+    if (role.permissions_configured || permissions.rows.length) {
+      return permissions.rows.map((row) => row.page_key);
+    }
+  }
+
+  const defaults = user.role === "store_manager"
+    ? defaultManagerPages
+    : defaultStaffPages;
+  return permissionPageKeys.filter((key) => defaults.has(key));
+}
+
+export async function canAccessAdminPage(
+  user: Pick<AuthUser, "id" | "role">,
+  pageKey: string,
+) {
+  return (await getAllowedAdminPageKeys(user)).includes(pageKey);
+}
+
 export async function saveRolePermissions(roleId: string, pageKeys: string[]) {
   await ensureRolePermissionsTable();
   const client = await pool.connect();
@@ -135,6 +197,11 @@ export async function saveRolePermissions(roleId: string, pageKeys: string[]) {
     await client.query(`DELETE FROM setup_role_permissions WHERE role_id = $1`, [
       roleId,
     ]);
+    await client.query(
+      `UPDATE setup_roles SET permissions_configured=TRUE,updated_at=NOW()
+       WHERE id=$1`,
+      [roleId],
+    );
 
     if (pageKeys.length > 0) {
       await client.query(
