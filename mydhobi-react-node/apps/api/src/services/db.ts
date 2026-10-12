@@ -1,0 +1,31 @@
+import { Pool } from "pg";
+
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not configured.");
+}
+
+declare global {
+  var mydhobiPool: Pool | undefined;
+}
+
+export const pool =
+  globalThis.mydhobiPool ??
+  new Pool({
+    connectionString,
+    max: Math.max(2, Math.min(100, Number(process.env.DB_POOL_MAX) || 10)),
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    statement_timeout: 30000,
+    ssl:
+      process.env.DATABASE_SSL === "true"
+        ? {
+            rejectUnauthorized: false,
+          }
+        : undefined,
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalThis.mydhobiPool = pool;
+}

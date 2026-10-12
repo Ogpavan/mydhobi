@@ -1,0 +1,40 @@
+export const orderStatuses = [
+  "New",
+  "Pickup Scheduled",
+  "Rider Assigned",
+  "Out for Pickup",
+  "Picked Up",
+  "Received at Store",
+  "Inspection in Progress",
+  "Awaiting Confirmation",
+  "Confirmed",
+  "In Cleaning",
+  "Quality Check",
+  "Ready",
+  "Delivery Assigned",
+  "Out for Delivery",
+  "Delivered",
+  "Cancelled",
+] as const;
+export type PortalOrderStatus = (typeof orderStatuses)[number];
+export const allowedOrderTransitions: Record<
+  PortalOrderStatus,
+  PortalOrderStatus[]
+> = {
+  New: ["Picked Up", "Cancelled"],
+  "Pickup Scheduled": ["Rider Assigned", "Out for Pickup", "Picked Up", "Cancelled"],
+  "Rider Assigned": ["Out for Pickup", "Picked Up", "Cancelled"],
+  "Out for Pickup": ["Picked Up", "Cancelled"],
+  "Picked Up": ["In Cleaning", "Cancelled"],
+  "Received at Store": ["Inspection in Progress", "Cancelled"],
+  "Inspection in Progress": ["Awaiting Confirmation", "Confirmed", "Cancelled"],
+  "Awaiting Confirmation": ["Confirmed", "Cancelled"],
+  Confirmed: ["In Cleaning", "Cancelled"],
+  "In Cleaning": ["Ready", "Cancelled"],
+  "Quality Check": ["Ready", "Cancelled"],
+  Ready: ["Delivery Assigned", "Out for Delivery", "Cancelled"],
+  "Delivery Assigned": ["Out for Delivery", "Cancelled"],
+  "Out for Delivery": ["Delivered"],
+  Delivered: [],
+  Cancelled: [],
+};

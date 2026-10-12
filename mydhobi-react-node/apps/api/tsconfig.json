@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/lib/*": ["src/services/*"],
+      "@mydhobi/domain/*": ["../../packages/domain/src/*"],
+      "@/server/*": ["src/platform/*"],
+      "@/components/*": ["../../packages/domain/src/components/*"]
+    }
+  },
+  "include": ["src", "../../packages/domain/src"]
+}
